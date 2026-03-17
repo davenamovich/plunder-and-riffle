@@ -1,17 +1,28 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
-import { useGetAgentStats } from "@workspace/api-client-react";
-import { ArrowRight, Bot, Zap, Coins, Users, ShieldCheck } from "lucide-react";
+import { useGetAgentStats, useLogin } from "@workspace/api-client-react";
+import { ArrowRight, Bot, Zap, Coins, Users, ShieldCheck, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Landing() {
-  const { openLoginModal, isAuthenticated } = useAuth();
-  
-  // Assuming "main-agent" is the slug
-  const { data: stats } = useGetAgentStats("main-agent", {
+  const { isAuthenticated, setToken } = useAuth();
+  const [email, setEmail] = useState("");
+  const [referralCode, setReferralCode] = useState("");
+  const [showReferral, setShowReferral] = useState(false);
+
+  const { data: stats } = useGetAgentStats("ralph", {
     query: { retry: false, refetchInterval: 30000 }
+  });
+
+  const { mutate: login, isPending, isSuccess } = useLogin({
+    mutation: {
+      onSuccess: (data) => {
+        setToken(data.token);
+      },
+    },
   });
 
   return (
@@ -58,28 +69,78 @@ export default function Landing() {
             Join today to get a free 24-hour spot in the agent's traffic rotator.
           </motion.p>
           
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4"
+            className="max-w-md mx-auto w-full"
           >
             {isAuthenticated ? (
-              <Link href="/dashboard">
-                <Button size="lg" className="w-full sm:w-auto text-lg px-8 h-14">
-                  Go to Dashboard <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-              </Link>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <Link href="/dashboard">
+                  <Button size="lg" className="w-full sm:w-auto text-lg px-8 h-14">
+                    Go to Dashboard <ArrowRight className="ml-2 h-5 w-5" />
+                  </Button>
+                </Link>
+                <Link href="/agent/ralph">
+                  <Button variant="outline" size="lg" className="w-full sm:w-auto text-lg px-8 h-14 glass-panel">
+                    Watch the Agent
+                  </Button>
+                </Link>
+              </div>
+            ) : isSuccess ? (
+              <div className="glass-panel rounded-2xl px-6 py-5 text-center border border-primary/30">
+                <p className="text-primary font-semibold text-lg">You're in! 🎉</p>
+                <p className="text-muted-foreground text-sm mt-1">Your free 24-hour rotator spot is being activated.</p>
+                <Link href="/dashboard">
+                  <Button className="mt-4 w-full" size="lg">Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" /></Button>
+                </Link>
+              </div>
             ) : (
-              <Button size="lg" className="w-full sm:w-auto text-lg px-8 h-14" onClick={openLoginModal}>
-                Get My Free Spot <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (email) login({ data: { email, referralCode: referralCode || undefined } });
+                }}
+                className="space-y-3"
+              >
+                <div className="flex gap-2">
+                  <Input
+                    type="email"
+                    placeholder="your@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="h-14 text-base bg-background/60 border-border/60 backdrop-blur-sm flex-1"
+                  />
+                  <Button type="submit" size="lg" className="h-14 px-6 shrink-0" disabled={isPending}>
+                    {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <><span className="hidden sm:inline">Get My Free Spot</span><ArrowRight className="h-5 w-5 sm:ml-2" /></>}
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                    onClick={() => setShowReferral(!showReferral)}
+                  >
+                    {showReferral ? "Hide referral code" : "Have a referral code?"}
+                  </button>
+                  <Link href="/agent/ralph">
+                    <span className="text-xs text-muted-foreground hover:text-primary transition-colors cursor-pointer">Watch the Agent →</span>
+                  </Link>
+                </div>
+                {showReferral && (
+                  <Input
+                    type="text"
+                    placeholder="Referral code (e.g. RALPH-123)"
+                    value={referralCode}
+                    onChange={(e) => setReferralCode(e.target.value)}
+                    className="h-11 text-sm bg-background/60 border-border/60 backdrop-blur-sm"
+                  />
+                )}
+                <p className="text-xs text-muted-foreground text-center">No credit card. No password. Just your email.</p>
+              </form>
             )}
-            <Link href="/agent/main-agent">
-              <Button variant="outline" size="lg" className="w-full sm:w-auto text-lg px-8 h-14 glass-panel">
-                Watch the Agent
-              </Button>
-            </Link>
           </motion.div>
 
           {/* Live Stats */}
@@ -125,7 +186,7 @@ export default function Landing() {
               <Button size="lg" className="text-lg px-10 h-14">Go to Dashboard</Button>
             </Link>
           ) : (
-            <Button size="lg" className="text-lg px-10 h-14" onClick={openLoginModal}>
+            <Button size="lg" className="text-lg px-10 h-14" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
               Claim Free Spot Now
             </Button>
           )}
