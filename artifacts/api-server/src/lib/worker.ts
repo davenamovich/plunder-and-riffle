@@ -19,6 +19,7 @@ import { eq, and, lt } from "drizzle-orm";
 import { classifyRawLeads, draftScoredLeads } from "./ralph.js";
 import { getDailyUsage } from "./moltis.js";
 import { seedDefaultSequenceIfNeeded } from "./dm.js";
+import { runAllAgentEngines } from "./agent-engine.js";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -110,13 +111,21 @@ export function startWorker() {
   // Reset daily caps + log usage — every hour
   setInterval(resetDailyCaps, 60 * MINUTE);
 
+  // Agent engine — every 30 minutes (respects per-agent engineNextRunAt)
+  setInterval(async () => {
+    try { await runAllAgentEngines(); } catch (err) {
+      console.error("[worker] engine tick error:", err);
+    }
+  }, 30 * MINUTE);
+
   // Run immediately on start to catch any queue backlog
   setTimeout(async () => {
     await seedDefaultSequenceIfNeeded();
     expireStaleSlots();
     resetDailyCaps();
     runClassifyTick().then(() => runDraftTick());
+    runAllAgentEngines().catch(err => console.error("[worker] engine startup:", err));
   }, 5 * SECOND);
 
-  console.log("[worker] scheduled: expire=30s, classify=15m (batch), draft=20m (batch), caps=60m");
+  console.log("[worker] scheduled: expire=30s, classify=15m (batch), draft=20m (batch), caps=60m, engine=30m");
 }

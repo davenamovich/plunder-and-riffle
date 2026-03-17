@@ -2,11 +2,20 @@ import React from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, LogOut, Activity, ExternalLink } from "lucide-react";
+import { LayoutDashboard, LogOut, Activity, Bot } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user, login, logout } = useAuth();
   const [location] = useLocation();
+
+  const navLink = (href: string, label: string) => {
+    const active = location === href || location.startsWith(href + "/");
+    return (
+      <Link href={href} className={`text-sm font-medium transition-colors hover:text-primary ${active ? "text-primary" : "text-muted-foreground"}`}>
+        {label}
+      </Link>
+    );
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-primary/30">
@@ -22,37 +31,43 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Link>
 
           <nav className="flex items-center space-x-2 md:space-x-4">
-            <Link href="/agent/ralph" className={`text-sm font-medium transition-colors hover:text-primary ${location.startsWith('/agent') ? 'text-primary' : 'text-muted-foreground'}`}>
-              The Agent
-            </Link>
+            {/* Public links */}
+            <div className="hidden md:flex items-center space-x-4">
+              {navLink("/agents", "Agents")}
+              {navLink("/engine", "Engine")}
+            </div>
 
             {isAuthenticated ? (
               <>
+                <div className="h-4 w-px bg-border hidden md:block" />
+
+                <Link href="/my-agent">
+                  <Button variant="ghost" size="sm" className={`hidden sm:flex gap-1.5 ${location.startsWith("/my-agent") ? "text-primary" : ""}`}>
+                    <Bot className="w-4 h-4" />
+                    My Agent
+                  </Button>
+                </Link>
+
                 <Link href="/dashboard">
-                  <Button variant="ghost" size="sm" className="hidden sm:flex">
-                    <LayoutDashboard className="w-4 h-4 mr-2" />
+                  <Button variant="ghost" size="sm" className={`hidden md:flex gap-1.5 ${location === "/dashboard" ? "text-primary" : ""}`}>
+                    <LayoutDashboard className="w-4 h-4" />
                     Dashboard
                   </Button>
                 </Link>
+
                 {user?.role === "admin" && (
                   <Link href="/admin">
-                    <Button variant="ghost" size="sm" className="hidden md:flex text-primary">
-                      <Activity className="w-4 h-4 mr-2" />
+                    <Button variant="ghost" size="sm" className="hidden md:flex text-primary gap-1.5">
+                      <Activity className="w-4 h-4" />
                       Admin
                     </Button>
                   </Link>
                 )}
-                <div className="h-4 w-px bg-border hidden sm:block mx-2" />
-                <div className="flex items-center space-x-3">
-                  <Link href={`/r/${user?.slug}`} className="hidden md:flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors">
-                    <ExternalLink className="w-3 h-3 mr-1" />
-                    My Rotator
-                  </Link>
-                  <Button variant="outline" size="sm" onClick={logout}>
-                    <LogOut className="w-4 h-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Logout</span>
-                  </Button>
-                </div>
+
+                <Button variant="outline" size="sm" onClick={logout} className="gap-1.5">
+                  <LogOut className="w-4 h-4" />
+                  <span className="hidden sm:inline">Logout</span>
+                </Button>
               </>
             ) : (
               <Button size="sm" onClick={login}>

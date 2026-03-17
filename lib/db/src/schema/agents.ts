@@ -41,6 +41,12 @@ export const agentsTable = pgTable("agents", {
   // Farcaster social identity
   farcasterFid: text("farcaster_fid"),
   farcasterHandle: text("farcaster_handle"),
+  // Agent Engine
+  engineEnabled: boolean("engine_enabled").notNull().default(false),
+  enginePublic: boolean("engine_public").notNull().default(false),
+  engineScheduleHours: integer("engine_schedule_hours").notNull().default(4),
+  engineLastRunAt: timestamp("engine_last_run_at"),
+  engineNextRunAt: timestamp("engine_next_run_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -14,6 +14,7 @@ import Admin from "@/pages/admin";
 import IcpPage from "@/pages/icp";
 import AgentsPage from "@/pages/agents";
 import MyAgentPage from "@/pages/my-agent";
+import EnginePage from "@/pages/engine";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -25,6 +26,8 @@ function Router() {
       <Route path="/icp" component={IcpPage} />
       <Route path="/agents" component={AgentsPage} />
       <Route path="/my-agent" component={MyAgentPage} />
+      <Route path="/engine/:slug" component={EnginePage} />
+      <Route path="/engine" component={EnginePage} />
       <Route path="/agent/:slug" component={AgentPage} />
       <Route path="/r/:userSlug" component={PersonalRotator} />
       <Route path="/dashboard" component={Dashboard} />
