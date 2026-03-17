@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import {
   agentsTable, rotatorSlotsTable, rotatorClicksTable,
-  usersTable, offersTable, offerSignupsTable
+  usersTable, offersTable, offerSignupsTable, referralRotatorTable
 } from "@workspace/db/schema";
 import { eq, and, gt, count, sql } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../lib/auth.js";
@@ -177,33 +177,145 @@ router.get("/personal-rotator/:userSlug", async (req, res) => {
       return;
     }
 
-    const signups = await db.select({
-      signup: offerSignupsTable,
-      offer: offersTable,
+    // Fetch referral rotator entries for this user (their direct referrals)
+    const referralEntries = await db.select({
+      entry: referralRotatorTable,
+      member: {
+        id: usersTable.id,
+        slug: usersTable.slug,
+        displayName: usersTable.displayName,
+        email: usersTable.email,
+        bio: usersTable.bio,
+      },
     })
-    .from(offerSignupsTable)
-    .innerJoin(offersTable, eq(offerSignupsTable.offerId, offersTable.id))
-    .where(eq(offerSignupsTable.userId, user.id));
+    .from(referralRotatorTable)
+    .innerJoin(usersTable, eq(referralRotatorTable.memberId, usersTable.id))
+    .where(eq(referralRotatorTable.ownerId, user.id));
 
-    const links = signups.map((s, i) => ({
-      offerId: s.offer.id,
-      offerName: s.offer.name,
-      url: s.signup.affiliateRef ? s.signup.affiliateRef : s.offer.offerUrl,
-      logoUrl: s.offer.logoUrl,
-      type: "offer",
-      displayOrder: i,
-    }));
+    const referralLinks = referralEntries
+      .filter(r => r.entry.isActive)
+      .map(r => ({
+        memberId: r.member.id,
+        memberSlug: r.member.slug,
+        displayName: r.member.displayName || r.member.email,
+        bio: r.member.bio,
+        url: `/r/${r.member.slug}`,
+        type: "referral",
+        clickCount: r.entry.clickCount,
+      }));
+
+    // Fallback: user's own offer links if no referral entries at all
+    let ownLinks: any[] = [];
+    if (referralEntries.length === 0) {
+      const signups = await db.select({ signup: offerSignupsTable, offer: offersTable })
+        .from(offerSignupsTable)
+        .innerJoin(offersTable, eq(offerSignupsTable.offerId, offersTable.id))
+        .where(eq(offerSignupsTable.userId, user.id));
+      ownLinks = signups.map((s, i) => ({
+        offerId: s.offer.id,
+        offerName: s.offer.name,
+        url: s.signup.affiliateRef || s.offer.offerUrl,
+        logoUrl: s.offer.logoUrl,
+        type: "offer",
+        displayOrder: i,
+      }));
+    }
 
     res.json({
       userId: user.id,
       userSlug: user.slug,
       displayName: user.displayName || user.email,
       bio: user.bio,
-      links,
+      referralLinks,
+      links: ownLinks,
+      hasReferralRotator: referralEntries.length > 0,
     });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── Referral Rotator Management ──────────────────────────────────────────────
+
+// GET /referral-rotator/my — list authenticated user's referral rotator entries
+router.get("/referral-rotator/my", requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).user;
+
+    const entries = await db.select({
+      entry: referralRotatorTable,
+      member: {
+        id: usersTable.id,
+        slug: usersTable.slug,
+        displayName: usersTable.displayName,
+        email: usersTable.email,
+        bio: usersTable.bio,
+      },
+    })
+    .from(referralRotatorTable)
+    .innerJoin(usersTable, eq(referralRotatorTable.memberId, usersTable.id))
+    .where(eq(referralRotatorTable.ownerId, authUser.id));
+
+    res.json({
+      referrals: entries.map(r => ({
+        entryId: r.entry.id,
+        memberId: r.member.id,
+        memberSlug: r.member.slug,
+        displayName: r.member.displayName || r.member.email,
+        bio: r.member.bio,
+        isActive: r.entry.isActive,
+        clickCount: r.entry.clickCount,
+        createdAt: r.entry.createdAt,
+        rotatorUrl: `/r/${r.member.slug}`,
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PUT /referral-rotator/:memberId/toggle — toggle a referral on/off
+router.put("/referral-rotator/:memberId/toggle", requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).user;
+    const { memberId } = req.params;
+
+    const existing = await db.select().from(referralRotatorTable)
+      .where(and(eq(referralRotatorTable.ownerId, authUser.id), eq(referralRotatorTable.memberId, memberId)))
+      .limit(1).then(r => r[0]);
+
+    if (!existing) {
+      res.status(404).json({ error: "Referral not found in your rotator" });
+      return;
+    }
+
+    const [updated] = await db.update(referralRotatorTable)
+      .set({ isActive: !existing.isActive })
+      .where(eq(referralRotatorTable.id, existing.id))
+      .returning();
+
+    res.json({ success: true, isActive: updated.isActive });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /referral-rotator/click/:memberSlug — track a click from the rotator
+router.post("/referral-rotator/click/:ownerSlug/:memberSlug", async (req, res) => {
+  try {
+    const owner = await db.select().from(usersTable).where(eq(usersTable.slug, req.params.ownerSlug)).limit(1).then(r => r[0]);
+    const member = await db.select().from(usersTable).where(eq(usersTable.slug, req.params.memberSlug)).limit(1).then(r => r[0]);
+    if (owner && member) {
+      await db.update(referralRotatorTable)
+        .set({ clickCount: sql`${referralRotatorTable.clickCount} + 1` })
+        .where(and(eq(referralRotatorTable.ownerId, owner.id), eq(referralRotatorTable.memberId, member.id)));
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ success: false });
   }
 });
 

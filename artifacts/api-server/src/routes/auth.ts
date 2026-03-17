@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db/schema";
+import { usersTable, referralRotatorTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { signToken } from "../lib/auth.js";
@@ -55,6 +55,15 @@ router.post("/auth/login", async (req, res) => {
         walletAddress: normalizedWallet,
       }).returning();
       user = newUser;
+
+      // Auto-add new user to their referrer's rotator
+      if (referredById) {
+        await db.insert(referralRotatorTable).values({
+          ownerId: referredById,
+          memberId: newUser.id,
+          isActive: true,
+        }).onConflictDoNothing();
+      }
     } else if (normalizedWallet && user.walletAddress !== normalizedWallet) {
       // Update wallet address if it changed or wasn't set yet
       const [updated] = await db.update(usersTable)

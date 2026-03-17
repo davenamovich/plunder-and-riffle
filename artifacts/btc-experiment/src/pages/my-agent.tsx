@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
@@ -11,8 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Bot, Clock, Copy, ExternalLink, CheckCircle, Zap, ArrowRight,
   Link as LinkIcon, Plug, Wifi, WifiOff, Users, Activity, RefreshCw,
-  ChevronRight, Lock
+  ChevronRight, Lock, RotateCcw, ToggleLeft, ToggleRight, UserCheck
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { formatDistanceToNow, isPast } from "date-fns";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -52,6 +53,34 @@ function useMyAgent(enabled: boolean) {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!resp.ok) throw new Error("Failed to load agent data");
+      return resp.json();
+    },
+    staleTime: 30_000,
+  });
+}
+
+interface ReferralEntry {
+  entryId: string;
+  memberId: string;
+  memberSlug: string;
+  displayName: string;
+  bio: string | null;
+  isActive: boolean;
+  clickCount: number;
+  createdAt: string;
+  rotatorUrl: string;
+}
+
+function useReferralRotator(enabled: boolean) {
+  const { token } = useAuth();
+  return useQuery<{ referrals: ReferralEntry[] }>({
+    queryKey: ["referral-rotator"],
+    enabled,
+    queryFn: async () => {
+      const resp = await fetch("/api/referral-rotator/my", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!resp.ok) throw new Error("Failed to load referral rotator");
       return resp.json();
     },
     staleTime: 30_000,
@@ -141,6 +170,129 @@ function SlotCard({ slot }: { slot: MyAgentData["slots"][0] }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Referral Rotator Card ─────────────────────────────────────────────────────
+
+function ReferralRotatorCard({ userSlug }: { userSlug: string }) {
+  const { token } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useReferralRotator(true);
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  async function handleToggle(memberId: string) {
+    setToggling(memberId);
+    try {
+      const resp = await fetch(`/api/referral-rotator/${memberId}/toggle`, {
+        method: "PUT",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!resp.ok) throw new Error("Toggle failed");
+      await queryClient.invalidateQueries({ queryKey: ["referral-rotator"] });
+    } catch {
+      toast({ title: "Error", description: "Could not update rotator.", variant: "destructive" });
+    } finally {
+      setToggling(null);
+    }
+  }
+
+  function copyRotatorLink() {
+    navigator.clipboard.writeText(`${window.location.origin}/r/${userSlug}`);
+    toast({ title: "Copied!", description: "Your personal rotator link is on the clipboard." });
+  }
+
+  const referrals = data?.referrals ?? [];
+  const activeCount = referrals.filter(r => r.isActive).length;
+
+  return (
+    <Card className="glass-panel border-border/50">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <RotateCcw className="h-4 w-4 text-primary" /> Personal Rotator
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            {!isLoading && (
+              <Badge variant="outline" className="text-xs">
+                {activeCount} of {referrals.length} active
+              </Badge>
+            )}
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={copyRotatorLink}>
+              <Copy className="h-3 w-3" /> Copy Link
+            </Button>
+            <a href={`/r/${userSlug}`} target="_blank" rel="noopener noreferrer">
+              <Button size="sm" variant="ghost" className="h-7 px-2">
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Button>
+            </a>
+          </div>
+        </div>
+        <CardDescription>
+          When someone visits your rotator link, they see your direct referrals. Toggle each one on or off.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">
+            {[1, 2].map(i => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
+          </div>
+        ) : referrals.length === 0 ? (
+          <div className="text-center py-8">
+            <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground mb-1">No referrals yet</p>
+            <p className="text-xs text-muted-foreground">
+              Share your referral link above. Each person who joins using your code appears here automatically.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {referrals.map(r => (
+              <div
+                key={r.memberId}
+                className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                  r.isActive
+                    ? "border-primary/20 bg-primary/5"
+                    : "border-border/30 bg-muted/10 opacity-60"
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-muted/40 border border-border/40 flex items-center justify-center flex-shrink-0">
+                    <UserCheck className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{r.displayName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-mono">/{r.memberSlug}</span>
+                      {r.clickCount > 0 && (
+                        <span className="ml-2 text-primary">{r.clickCount} clicks</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <a
+                    href={r.rotatorUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                  <Switch
+                    checked={r.isActive}
+                    disabled={toggling === r.memberId}
+                    onCheckedChange={() => handleToggle(r.memberId)}
+                    className="data-[state=checked]:bg-primary"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -270,6 +422,11 @@ export default function MyAgentPage() {
                   )}
                 </CardContent>
               </Card>
+            </motion.div>
+
+            {/* Referral Rotator */}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+              <ReferralRotatorCard userSlug={data.user.slug} />
             </motion.div>
 
             {/* Active slots */}

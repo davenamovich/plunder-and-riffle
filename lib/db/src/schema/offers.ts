@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -56,3 +56,18 @@ export const personalRotatorLinksTable = pgTable("personal_rotator_links", {
 });
 
 export type PersonalRotatorLink = typeof personalRotatorLinksTable.$inferSelect;
+
+// ─── Referral Rotator ─────────────────────────────────────────────────────────
+// Each row = one direct referral the owner has added to their personal rotator.
+// Owner can toggle isActive on/off per referral.
+
+export const referralRotatorTable = pgTable("referral_rotator", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  ownerId: text("owner_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  memberId: text("member_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  isActive: boolean("is_active").notNull().default(true),
+  clickCount: integer("click_count").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type ReferralRotatorEntry = typeof referralRotatorTable.$inferSelect;
