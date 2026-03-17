@@ -1,0 +1,315 @@
+Best Replit runtime setup
+
+You want 3 long-running processes conceptually, but inside one Replit project:
+
+Next.js web app
+
+Worker loop
+
+Moltis process
+
+Since Replit likes a simple startup flow, wire it so one command starts all three.
+
+package.json scripts
+
+Use something like this:
+
+{
+  "scripts": {
+    "dev": "concurrently \"next dev\" \"tsx workers/index.ts\" \"tsx scripts/start-moltis.ts\"",
+    "build": "next build",
+    "start": "concurrently \"next start\" \"tsx workers/index.ts\" \"tsx scripts/start-moltis.ts\"",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:seed": "tsx prisma/seed.ts"
+  }
+}
+
+You’ll need:
+
+npm install concurrently tsx
+Exact .replit file
+
+Use this:
+
+run = "npm run dev"
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = ["sh", "-c", "npm run build && npm run start"]
+
+[[ports]]
+localPort = 3000
+externalPort = 80
+
+[[ports]]
+localPort = 8787
+externalPort = 8787
+
+[[ports]]
+localPort = 4001
+externalPort = 4001
+What these ports are for
+
+3000 = Next.js app
+
+8787 = Moltis local API
+
+4001 = optional worker/health/debug port if needed
+
+If you do not need external Moltis access, you can still keep it internal only.
+
+Exact replit.nix
+
+Use this as a solid default:
+
+{ pkgs }: {
+  deps = [
+    pkgs.nodejs_20
+    pkgs.nodePackages.npm
+    pkgs.openssl
+    pkgs.git
+    pkgs.curl
+    pkgs.pkg-config
+    pkgs.python3
+  ];
+}
+
+If Moltis needs additional runtime libraries later, add them here.
+
+Recommended environment variables
+
+Your .env.example should look like this:
+
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NODE_ENV=development
+
+# Database
+DATABASE_URL=
+
+# Redis
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+
+# Privy
+NEXT_PUBLIC_PRIVY_APP_ID=
+PRIVY_APP_SECRET=
+
+# Moltis
+MOLTIS_BASE_URL=http://127.0.0.1:8787
+MOLTIS_API_KEY=
+MOLTIS_AGENT_ID=main-agent
+
+# Chutes / model provider
+CHUTES_API_KEY=
+CHUTES_BASE_URL=
+
+# Admin
+ADMIN_EMAIL=
+
+# Tracking
+HOUSE_FALLBACK_URL=
+DEFAULT_AGENT_SLUG=main-agent
+Exact startup behavior
+scripts/start-moltis.ts
+
+This script should:
+
+check if Moltis is already running
+
+if not, spawn it as a child process
+
+wait for health check
+
+log success/failure
+
+workers/index.ts
+
+This should:
+
+start a loop
+
+run every 15–30 seconds for lightweight checks
+
+dispatch heavier jobs every few minutes
+
+Worker schedule example
+
+every 30s: check queued rotator activations
+
+every 30s: expire ended slots
+
+every 5 min: ingest lead candidates
+
+every 5 min: batch classify
+
+every 10 min: draft comments
+
+every 30 min: roll up metrics
+
+every 24h: reset daily lead cap
+
+Recommended database choice in Replit
+
+Use Prisma here.
+
+Why:
+
+faster for MVP
+
+clearer schema management
+
+easier seed/setup
+
+good fit for one-agent build
+
+less friction than Drizzle for this specific use case
+
+So the project should use:
+
+prisma/schema.prisma
+lib/db.ts
+
+with lib/db.ts like:
+
+import { PrismaClient } from "@prisma/client";
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+export const db =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: ["error", "warn"],
+  });
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+How Moltis should fit in this structure
+Do NOT do this
+
+put rotator logic inside Moltis
+
+let Moltis decide payouts
+
+let Moltis own referrals
+
+let Moltis directly mutate critical slot/accounting truth
+
+Do this
+
+Moltis should live in:
+
+services/moltis/
+
+and only handle:
+
+persona execution
+
+scoring requests
+
+drafting requests
+
+future keyword/ICP generation helpers
+
+guarded action planning
+
+Example files
+
+moltis-client.ts = raw HTTP wrapper
+
+moltis-adapter.service.ts = app-facing service
+
+prompt-pack.ts = prompts for classify/draft/icp
+
+tools/*.tool.ts = structured task definitions
+
+Exact rotator-related files
+
+These are the key files for your product:
+
+services/rotator/agent-rotator.service.ts
+services/rotator/personal-rotator.service.ts
+services/rotator/selector.service.ts
+services/rotator/activation.service.ts
+services/rotator/expiration.service.ts
+services/rotator/click-log.service.ts
+services/offers/inheritance.service.ts
+app/api/rotator/redirect/route.ts
+app/api/offers/redeem/route.ts
+
+That is your actual engine.
+
+Minimum viable pages
+
+You only need these first:
+
+app/page.tsx
+app/agent/[slug]/page.tsx
+app/r/[slug]/page.tsx
+app/dashboard/page.tsx
+app/admin/page.tsx
+app/api/offers/redeem/route.ts
+app/api/rotator/redirect/route.ts
+app/api/health/route.ts
+app/api/health/moltis/route.ts
+
+Everything else can be added after that.
+
+Best MVP build order inside this structure
+Phase 1
+
+Prisma schema
+
+seed one agent
+
+seed one offer
+
+build /agent/[slug]
+
+build offer signup endpoint
+
+build free slot activation
+
+build redirect route
+
+build click logging
+
+Phase 2
+
+personal rotator page
+
+referral inheritance
+
+user dashboard
+
+admin dashboard basics
+
+paid slot pricing
+
+Phase 3
+
+Moltis adapter
+
+Ralph loop ingestion
+
+classification queue
+
+draft queue
+
+approval flow
+
+ICP builder
+
+The simplest mental model
+
+Think of the Replit app like this:
+
+Next.js = product surface
+Prisma/Postgres = truth
+Redis = timing + queues
+Moltis = agent brain
+Workers = heartbeat
