@@ -5,3 +5,5 @@ export * from "./rotator";
 export * from "./leads";
 export * from "./sessions";
 export * from "./usage";
+export * from "./funnel";
+export * from "./dm";

@@ -20,6 +20,7 @@ import {
   draftResponse,
   hasBudget,
 } from "./moltis.js";
+import { trackEvent } from "./funnel.js";
 
 const BATCH_SIZE = 20;
 
@@ -124,6 +125,8 @@ export async function classifyRawLeads(): Promise<{ processed: number; rejected:
         updatedAt:    now,
       }).where(eq(leadsTable.id, lead.id));
 
+      await trackEvent("candidate_scored", lead.id, lead.source, { score, recommendedAction, replyStyle });
+
       if (recommendedAction === "draft") {
         draftLeads.push(lead);
         draftReplyStyles.push(replyStyle);
@@ -149,6 +152,8 @@ export async function classifyRawLeads(): Promise<{ processed: number; rejected:
         draft:     result.draft,
         updatedAt: now,
       }).where(eq(leadsTable.id, lead.id));
+
+      await trackEvent("reply_drafted", lead.id, lead.source, { replyStyle: draftReplyStyles[i], status: nextStatus });
     }
   }
 
@@ -202,6 +207,7 @@ export async function draftScoredLeads(): Promise<{ drafted: number; skipped: nu
       updatedAt: now,
     }).where(eq(leadsTable.id, lead.id));
 
+    await trackEvent("reply_drafted", lead.id, lead.source, { status: nextStatus });
     drafted++;
   }
 
@@ -240,7 +246,11 @@ export async function approveLead(leadId: string): Promise<boolean> {
     .set({ status: "approved", updatedAt: new Date() })
     .where(and(eq(leadsTable.id, leadId), inArray(leadsTable.status, ["pending_approval", "scored"])))
     .returning();
-  return result.length > 0;
+  if (result.length > 0) {
+    await trackEvent("reply_approved", leadId, result[0]?.source);
+    return true;
+  }
+  return false;
 }
 
 export async function rejectLead(leadId: string, reason: string): Promise<boolean> {
@@ -256,7 +266,11 @@ export async function markLeadPosted(leadId: string): Promise<boolean> {
     .set({ status: "posted", postedAt: new Date(), updatedAt: new Date() })
     .where(and(eq(leadsTable.id, leadId), eq(leadsTable.status, "approved")))
     .returning();
-  return result.length > 0;
+  if (result.length > 0) {
+    await trackEvent("reply_posted", leadId, result[0]?.source);
+    return true;
+  }
+  return false;
 }
 
 // ─── Manual single-lead reclassify/redraft ─────────────────────────────────────

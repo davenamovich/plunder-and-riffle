@@ -9,6 +9,7 @@ import dashboardRouter from "./dashboard.js";
 import keywordsRouter from "./keywords.js";
 import adminRouter from "./admin.js";
 import cronRouter from "./cron.js";
+import trackingRouter from "./tracking.js";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(dashboardRouter);
 router.use(keywordsRouter);
 router.use(adminRouter);
 router.use(cronRouter);
+router.use(trackingRouter);
 
 export default router;

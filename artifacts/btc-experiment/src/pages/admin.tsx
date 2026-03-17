@@ -12,6 +12,15 @@ import {
   useAdminExpireSlot,
   useGetRalphStatus,
   useRunRalph,
+  useGetAdminFunnel,
+  useGetDmQueue,
+  useTriggerDm,
+  useMarkDmSent,
+  useCancelDmSend,
+  useGetDmSequences,
+  useUpdateDmSequence,
+  useMarkLeadPosted,
+  type DmStep,
 } from "@workspace/api-client-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -19,13 +28,15 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
   ShieldAlert, Trash2, CheckCircle, XCircle, Bot, Zap, Play,
   RefreshCw, Activity, Users, Clock, ChevronDown, ChevronUp, Eye,
-  AlertTriangle, ToggleLeft, ToggleRight
+  AlertTriangle, ToggleLeft, ToggleRight, Mail, Send, BarChart2,
+  Check, Ban, Copy, Plus, Minus
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -109,10 +120,12 @@ function ScoreDimensionsPanel({ dims, reason }: { dims?: any; reason?: string })
 
 // ─── Expand / collapse lead row ────────────────────────────────────────────────
 
-function LeadRow({ lead, onApprove, onReject }: {
+function LeadRow({ lead, onApprove, onReject, onTriggerDm, onMarkPosted }: {
   lead: any;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
+  onTriggerDm: (id: string) => void;
+  onMarkPosted: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const score = lead.score != null ? lead.score.toFixed(2) : "—";
@@ -145,6 +158,16 @@ function LeadRow({ lead, onApprove, onReject }: {
                 </Button>
                 <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-destructive hover:text-destructive" onClick={() => onReject(lead.id)}>
                   <XCircle className="w-3 h-3 mr-1" /> Reject
+                </Button>
+              </>
+            )}
+            {lead.status === "approved" && (
+              <>
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onTriggerDm(lead.id)}>
+                  <Mail className="w-3 h-3 mr-1" /> Send DM
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-green-400 hover:text-green-300" onClick={() => onMarkPosted(lead.id)}>
+                  <Check className="w-3 h-3 mr-1" /> Mark Posted
                 </Button>
               </>
             )}
@@ -238,6 +261,12 @@ export default function Admin() {
     return <Redirect to="/" />;
   }
 
+  // ── DM Sequences editor state ──
+  const [editingSeqId, setEditingSeqId] = useState<string | null>(null);
+  const [editingSeqName, setEditingSeqName] = useState("");
+  const [editingSteps, setEditingSteps] = useState<DmStep[]>([]);
+  const [dmQueueFilter, setDmQueueFilter] = useState("pending");
+
   // ── Data hooks ──
   const { data: settings, refetch: refetchSettings } = useGetAdminSettings();
   const { data: slotsRes, refetch: refetchSlots } = useGetAdminRotatorSlots();
@@ -246,6 +275,9 @@ export default function Admin() {
   const { data: ralphStatus, refetch: refetchRalph, isLoading: isLoadingRalph } = useGetRalphStatus({
     query: { refetchInterval: 30000 },
   });
+  const { data: funnelData, refetch: refetchFunnel } = useGetAdminFunnel();
+  const { data: dmQueueData, refetch: refetchDmQueue } = useGetDmQueue(dmQueueFilter);
+  const { data: seqData, refetch: refetchSeqs } = useGetDmSequences();
 
   // ── Mutation hooks ──
   const { mutate: updateSettings, isPending: isSavingSettings } = useUpdateAdminSettings({
@@ -283,6 +315,48 @@ export default function Admin() {
     },
   });
 
+  const { mutate: triggerDm } = useTriggerDm({
+    mutation: {
+      onSuccess: (data) => {
+        if (data.success) {
+          toast({ title: `DM sequence triggered — ${data.stepsQueued} step(s) queued` });
+          refetchDmQueue();
+          refetchFunnel();
+        } else {
+          toast({ title: data.error || "Failed to trigger DM", variant: "destructive" });
+        }
+      },
+    },
+  });
+
+  const { mutate: markDmSent } = useMarkDmSent({
+    mutation: {
+      onSuccess: () => { toast({ title: "DM marked as sent" }); refetchDmQueue(); refetchFunnel(); },
+    },
+  });
+
+  const { mutate: cancelDmSend } = useCancelDmSend({
+    mutation: {
+      onSuccess: () => { toast({ title: "DM send cancelled" }); refetchDmQueue(); },
+    },
+  });
+
+  const { mutate: markPosted } = useMarkLeadPosted({
+    mutation: {
+      onSuccess: () => { toast({ title: "Lead marked as posted ✓" }); refetchLeads(); refetchRalph(); refetchFunnel(); },
+    },
+  });
+
+  const { mutate: saveSeq, isPending: isSavingSeq } = useUpdateDmSequence({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Sequence saved" });
+        setEditingSeqId(null);
+        refetchSeqs();
+      },
+    },
+  });
+
   const [localSettings, setLocalSettings] = React.useState<any>({});
   React.useEffect(() => { if (settings) setLocalSettings(settings); }, [settings]);
 
@@ -309,7 +383,7 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="ralph" className="w-full">
-        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-5 h-11 mb-8">
+        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-6 h-11 mb-8">
           <TabsTrigger value="ralph" className="flex items-center gap-1.5">
             <Bot className="w-3.5 h-3.5" /> Ralph
           </TabsTrigger>
@@ -320,6 +394,9 @@ export default function Admin() {
                 {pendingCount > 9 ? "9+" : pendingCount}
               </span>
             )}
+          </TabsTrigger>
+          <TabsTrigger value="funnel" className="flex items-center gap-1.5">
+            <BarChart2 className="w-3.5 h-3.5" /> Funnel
           </TabsTrigger>
           <TabsTrigger value="rotator">Rotator</TabsTrigger>
           <TabsTrigger value="users"><Users className="w-3.5 h-3.5 mr-1" />Users</TabsTrigger>
@@ -512,6 +589,8 @@ export default function Admin() {
                         lead={lead}
                         onApprove={(id) => approveLead({ id })}
                         onReject={(id) => setRejectingId(id)}
+                        onTriggerDm={(id) => triggerDm({ id })}
+                        onMarkPosted={(id) => markPosted({ id })}
                       />
                     ))
                   )}
@@ -546,6 +625,178 @@ export default function Admin() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* ── FUNNEL TAB ── */}
+        <TabsContent value="funnel" className="space-y-6">
+
+          {/* Attribution Summary */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="flex items-center gap-2"><BarChart2 className="w-5 h-5 text-primary" /> Attribution Funnel</CardTitle>
+                <CardDescription>Event counts across the full lead journey. Auto-refreshes every 30s.</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => refetchFunnel()}><RefreshCw className="w-4 h-4" /></Button>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const FUNNEL_EVENTS = [
+                  { key: "candidate_scored",  label: "Candidates Scored",   color: "bg-amber-500" },
+                  { key: "reply_drafted",     label: "Replies Drafted",     color: "bg-blue-500" },
+                  { key: "reply_approved",    label: "Replies Approved",    color: "bg-primary" },
+                  { key: "reply_posted",      label: "Replies Posted",      color: "bg-green-500" },
+                  { key: "dm_triggered",      label: "DM Sequences Queued", color: "bg-violet-500" },
+                  { key: "dm_sent",           label: "DMs Sent",            color: "bg-green-400" },
+                  { key: "click",             label: "Link Clicks",         color: "bg-amber-400" },
+                ];
+                const summary = funnelData?.summary || {};
+                const maxVal = Math.max(...FUNNEL_EVENTS.map(e => summary[e.key] || 0), 1);
+                return (
+                  <div className="space-y-2.5">
+                    {FUNNEL_EVENTS.map(ev => {
+                      const count = summary[ev.key] || 0;
+                      const pct = Math.round((count / maxVal) * 100);
+                      return (
+                        <div key={ev.key} className="flex items-center gap-3">
+                          <span className="w-44 text-xs text-muted-foreground shrink-0">{ev.label}</span>
+                          <div className="flex-1 h-6 bg-muted/30 rounded overflow-hidden">
+                            <div className={`h-full ${ev.color} transition-all duration-500 flex items-center`}
+                              style={{ width: `${pct}%`, minWidth: count > 0 ? "2rem" : 0 }} />
+                          </div>
+                          <span className="w-10 text-right text-sm font-bold font-display tabular-nums">{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+
+          {/* DM Queue */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="flex items-center gap-2"><Mail className="w-5 h-5 text-primary" /> DM Queue</CardTitle>
+                <CardDescription>{dmQueueData?.total ?? 0} item(s) · Copy message, mark sent or cancel.</CardDescription>
+              </div>
+              <div className="flex gap-1">
+                {["pending", "sent", "cancelled", "all"].map(s => (
+                  <Button key={s} size="sm" variant={dmQueueFilter === s ? "default" : "ghost"} className="h-7 px-2 text-xs capitalize"
+                    onClick={() => setDmQueueFilter(s)}>
+                    {s}
+                  </Button>
+                ))}
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => refetchDmQueue()}>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Lead</TableHead>
+                    <TableHead>Sequence</TableHead>
+                    <TableHead>Step</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Scheduled</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!dmQueueData?.queue?.length ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">No DM sends in this view.</TableCell>
+                    </TableRow>
+                  ) : (
+                    dmQueueData.queue.map(item => (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          <p className="font-mono text-xs">{item.leadHandle || item.leadId.slice(0, 8)}</p>
+                          <p className="text-[10px] text-muted-foreground capitalize">{item.leadSource}</p>
+                        </TableCell>
+                        <TableCell className="text-xs">{item.seqName || "—"}</TableCell>
+                        <TableCell className="font-mono text-xs">#{item.stepIndex}</TableCell>
+                        <TableCell>
+                          <Badge variant={item.status === "sent" ? "success" : item.status === "cancelled" ? "destructive" : "outline"} className="text-[10px]">
+                            {item.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {item.scheduledAt ? formatDistanceToNow(new Date(item.scheduledAt), { addSuffix: true }) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {item.message && (
+                              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs"
+                                onClick={() => { navigator.clipboard.writeText(item.message!); toast({ title: "Message copied" }); }}>
+                                <Copy className="w-3 h-3" />
+                              </Button>
+                            )}
+                            {item.status === "pending" && (
+                              <>
+                                <Button variant="outline" size="sm" className="h-7 px-2 text-xs text-green-400 border-green-500/30"
+                                  onClick={() => markDmSent({ dmSendId: item.id })}>
+                                  <Send className="w-3 h-3 mr-1" /> Sent
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive"
+                                  onClick={() => cancelDmSend({ dmSendId: item.id })}>
+                                  <Ban className="w-3 h-3" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Recent Events */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+                <Activity className="w-4 h-4" /> Recent Funnel Events
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Event</TableHead>
+                    <TableHead>Lead</TableHead>
+                    <TableHead>Platform</TableHead>
+                    <TableHead>Time</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!funnelData?.recentEvents?.length ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No events yet.</TableCell>
+                    </TableRow>
+                  ) : (
+                    funnelData.recentEvents.map(ev => (
+                      <TableRow key={ev.id}>
+                        <TableCell>
+                          <Badge variant="outline" className="text-[10px] font-mono">{ev.eventType.replace(/_/g, " ")}</Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{ev.leadId?.slice(0, 8) || "—"}</TableCell>
+                        <TableCell className="text-xs capitalize text-muted-foreground">{ev.platform || "—"}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {formatDistanceToNow(new Date(ev.createdAt), { addSuffix: true })}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ── ROTATOR TAB ── */}
@@ -646,6 +897,95 @@ export default function Admin() {
 
         {/* ── SETTINGS TAB ── */}
         <TabsContent value="settings" className="space-y-6">
+
+          {/* DM Sequences Editor */}
+          <Card className="max-w-2xl border-border/40">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Mail className="w-5 h-5 text-primary" /> DM Sequences</CardTitle>
+              <CardDescription>Edit outreach steps. Use <code className="text-xs bg-muted px-1 rounded">{"{{handle}}"}</code> and <code className="text-xs bg-muted px-1 rounded">{"{{trackingLink}}"}</code> as placeholders.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!seqData?.sequences?.length ? (
+                <p className="text-sm text-muted-foreground">No sequences found. They are seeded on worker startup.</p>
+              ) : (
+                seqData.sequences.map(seq => (
+                  <div key={seq.id} className="border border-border/40 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-sm">{seq.name}</p>
+                        <p className="text-xs text-muted-foreground font-mono">{seq.agentSlug} · {seq.steps.length} step(s)</p>
+                      </div>
+                      {editingSeqId === seq.id ? (
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="ghost" onClick={() => setEditingSeqId(null)}>Cancel</Button>
+                          <Button size="sm" disabled={isSavingSeq}
+                            onClick={() => saveSeq({ id: seq.id, name: editingSeqName, steps: editingSteps })}>
+                            {isSavingSeq ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : "Save"}
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => {
+                          setEditingSeqId(seq.id);
+                          setEditingSeqName(seq.name);
+                          setEditingSteps(seq.steps.map(s => ({ ...s })));
+                        }}>Edit</Button>
+                      )}
+                    </div>
+
+                    {editingSeqId === seq.id ? (
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium">Sequence Name</label>
+                          <Input value={editingSeqName} onChange={e => setEditingSeqName(e.target.value)} className="h-8 text-sm" />
+                        </div>
+                        {editingSteps.map((step, idx) => (
+                          <div key={idx} className="border border-border/30 rounded-lg p-3 space-y-2 bg-muted/10">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-semibold text-muted-foreground">Step {idx + 1}</p>
+                              {editingSteps.length > 1 && (
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive"
+                                  onClick={() => setEditingSteps(prev => prev.filter((_, i) => i !== idx))}>
+                                  <Minus className="w-3 h-3" />
+                                </Button>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              <div className="space-y-1">
+                                <label className="text-[10px] text-muted-foreground">Delay (hours)</label>
+                                <Input type="number" min={0} value={step.delayHours}
+                                  onChange={e => setEditingSteps(prev => prev.map((s, i) => i === idx ? { ...s, delayHours: Number(e.target.value) } : s))}
+                                  className="h-7 text-xs" />
+                              </div>
+                              <div className="col-span-2 space-y-1">
+                                <label className="text-[10px] text-muted-foreground">Message (supports {"{{handle}}"}, {"{{trackingLink}}"})</label>
+                                <Textarea rows={3} value={step.message}
+                                  onChange={e => setEditingSteps(prev => prev.map((s, i) => i === idx ? { ...s, message: e.target.value } : s))}
+                                  className="text-xs resize-none" />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        <Button size="sm" variant="outline" className="w-full gap-1 h-8"
+                          onClick={() => setEditingSteps(prev => [...prev, { stepIndex: prev.length, delayHours: 48, message: "" }])}>
+                          <Plus className="w-3.5 h-3.5" /> Add Step
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {seq.steps.map((s, i) => (
+                          <div key={i} className="flex gap-3 text-xs text-muted-foreground">
+                            <span className="shrink-0 font-mono w-16">+{s.delayHours}h</span>
+                            <p className="line-clamp-2 leading-relaxed">{s.message || <em>Empty</em>}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="max-w-2xl border-border/40">
             <CardHeader>
               <CardTitle>System Configuration</CardTitle>

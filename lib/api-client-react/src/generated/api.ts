@@ -2531,3 +2531,157 @@ export const useGetAdminUsage = <TError = ErrorType<unknown>>(options?: {
   queryFn: () => getAdminUsage(),
   ...options?.query,
 });
+
+// ─── Funnel Attribution ───────────────────────────────────────────────────────
+
+export interface FunnelSummaryResponse {
+  summary: Record<string, number>;
+  recentEvents: Array<{
+    id: string;
+    leadId: string | null;
+    eventType: string;
+    platform: string | null;
+    metadata: Record<string, unknown> | null;
+    createdAt: string;
+  }>;
+}
+
+export const getAdminFunnel = async (options?: RequestInit): Promise<FunnelSummaryResponse> =>
+  customFetch<FunnelSummaryResponse>("/api/admin/funnel", options);
+
+export const useGetAdminFunnel = <TError = ErrorType<unknown>>(options?: {
+  query?: UseQueryOptions<FunnelSummaryResponse, TError>;
+}) => useQuery<FunnelSummaryResponse, TError>({
+  queryKey: ["getAdminFunnel"],
+  queryFn: () => getAdminFunnel(),
+  refetchInterval: 30000,
+  ...options?.query,
+});
+
+// ─── DM Queue ─────────────────────────────────────────────────────────────────
+
+export interface DmQueueItem {
+  id: string;
+  leadId: string;
+  sequenceId: string;
+  stepIndex: number;
+  status: string;
+  message: string | null;
+  scheduledAt: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  leadHandle: string | null;
+  leadSource: string | null;
+  leadContent: string | null;
+  seqName: string | null;
+}
+
+export interface DmQueueResponse { queue: DmQueueItem[]; total: number }
+
+export const getDmQueue = async (status?: string, options?: RequestInit): Promise<DmQueueResponse> =>
+  customFetch<DmQueueResponse>(`/api/admin/dm-queue${status ? `?status=${status}` : ""}`, options);
+
+export const useGetDmQueue = <TError = ErrorType<unknown>>(status?: string, options?: {
+  query?: UseQueryOptions<DmQueueResponse, TError>;
+}) => useQuery<DmQueueResponse, TError>({
+  queryKey: ["getDmQueue", status],
+  queryFn: () => getDmQueue(status),
+  refetchInterval: 15000,
+  ...options?.query,
+});
+
+// ─── Trigger DM ───────────────────────────────────────────────────────────────
+
+export const triggerDm = async (id: string, options?: RequestInit) =>
+  customFetch<{ success: boolean; stepsQueued?: number; error?: string }>(`/api/admin/leads/${id}/trigger-dm`, {
+    ...options, method: "POST",
+  });
+
+export const useTriggerDm = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof triggerDm>>, TError, { id: string }, TContext>;
+}) => useMutation<Awaited<ReturnType<typeof triggerDm>>, TError, { id: string }, TContext>({
+  mutationFn: ({ id }) => triggerDm(id),
+  ...options?.mutation,
+});
+
+// ─── Mark DM Sent ─────────────────────────────────────────────────────────────
+
+export const markDmSent = async (dmSendId: string, options?: RequestInit) =>
+  customFetch<{ success: boolean }>(`/api/admin/dm-sends/${dmSendId}/mark-sent`, {
+    ...options, method: "POST",
+  });
+
+export const useMarkDmSent = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<{ success: boolean }, TError, { dmSendId: string }, TContext>;
+}) => useMutation<{ success: boolean }, TError, { dmSendId: string }, TContext>({
+  mutationFn: ({ dmSendId }) => markDmSent(dmSendId),
+  ...options?.mutation,
+});
+
+// ─── Cancel DM Send ───────────────────────────────────────────────────────────
+
+export const cancelDmSend = async (dmSendId: string, options?: RequestInit) =>
+  customFetch<{ success: boolean }>(`/api/admin/dm-sends/${dmSendId}/cancel`, {
+    ...options, method: "POST",
+  });
+
+export const useCancelDmSend = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<{ success: boolean }, TError, { dmSendId: string }, TContext>;
+}) => useMutation<{ success: boolean }, TError, { dmSendId: string }, TContext>({
+  mutationFn: ({ dmSendId }) => cancelDmSend(dmSendId),
+  ...options?.mutation,
+});
+
+// ─── DM Sequences ─────────────────────────────────────────────────────────────
+
+export interface DmStep { stepIndex: number; delayHours: number; message: string }
+export interface DmSequence {
+  id: string;
+  name: string;
+  agentSlug: string;
+  steps: DmStep[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DmSequencesResponse { sequences: DmSequence[] }
+
+export const getDmSequences = async (options?: RequestInit): Promise<DmSequencesResponse> =>
+  customFetch<DmSequencesResponse>("/api/admin/dm-sequences", options);
+
+export const useGetDmSequences = <TError = ErrorType<unknown>>(options?: {
+  query?: UseQueryOptions<DmSequencesResponse, TError>;
+}) => useQuery<DmSequencesResponse, TError>({
+  queryKey: ["getDmSequences"],
+  queryFn: () => getDmSequences(),
+  ...options?.query,
+});
+
+export const updateDmSequence = async (id: string, body: { name: string; steps: DmStep[] }, options?: RequestInit) =>
+  customFetch<{ success: boolean; id: string }>(`/api/admin/dm-sequences/${id}`, {
+    ...options, method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(body),
+  });
+
+export const useUpdateDmSequence = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateDmSequence>>, TError, { id: string; name: string; steps: DmStep[] }, TContext>;
+}) => useMutation<Awaited<ReturnType<typeof updateDmSequence>>, TError, { id: string; name: string; steps: DmStep[] }, TContext>({
+  mutationFn: ({ id, name, steps }) => updateDmSequence(id, { name, steps }),
+  ...options?.mutation,
+});
+
+// ─── Mark Lead Posted ─────────────────────────────────────────────────────────
+
+export const markLeadPosted = async (id: string, options?: RequestInit) =>
+  customFetch<{ success: boolean }>(`/api/admin/leads/${id}/mark-posted`, {
+    ...options, method: "POST",
+  });
+
+export const useMarkLeadPosted = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<{ success: boolean }, TError, { id: string }, TContext>;
+}) => useMutation<{ success: boolean }, TError, { id: string }, TContext>({
+  mutationFn: ({ id }) => markLeadPosted(id),
+  ...options?.mutation,
+});

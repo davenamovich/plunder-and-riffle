@@ -18,6 +18,7 @@ import { rotatorSlotsTable, agentsTable } from "@workspace/db/schema";
 import { eq, and, lt } from "drizzle-orm";
 import { classifyRawLeads, draftScoredLeads } from "./ralph.js";
 import { getDailyUsage } from "./moltis.js";
+import { seedDefaultSequenceIfNeeded } from "./dm.js";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -110,7 +111,8 @@ export function startWorker() {
   setInterval(resetDailyCaps, 60 * MINUTE);
 
   // Run immediately on start to catch any queue backlog
-  setTimeout(() => {
+  setTimeout(async () => {
+    await seedDefaultSequenceIfNeeded();
     expireStaleSlots();
     resetDailyCaps();
     runClassifyTick().then(() => runDraftTick());
