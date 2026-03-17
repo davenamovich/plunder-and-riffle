@@ -1,8 +1,10 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable } from "@workspace/db/schema";
-import { eq, and, gt, count, sql } from "drizzle-orm";
+import { eq, and, gt, count } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
+import { moltisStatus } from "../lib/moltis.js";
+import { runRalphLoop } from "../lib/ralph.js";
 
 const router = Router();
 
@@ -171,6 +173,36 @@ router.get("/admin/leads", requireAdmin, async (req, res) => {
       })),
       total,
     });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Ralph loop status
+router.get("/admin/ralph/status", requireAdmin, async (req, res) => {
+  try {
+    const moltis = moltisStatus();
+    const leadCounts = await db
+      .select({ status: leadsTable.status, count: count() })
+      .from(leadsTable)
+      .groupBy(leadsTable.status);
+
+    res.json({
+      moltis,
+      leads: Object.fromEntries(leadCounts.map((r) => [r.status, Number(r.count)])),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Manually trigger one full Ralph loop cycle
+router.post("/admin/ralph/run", requireAdmin, async (req, res) => {
+  try {
+    const result = await runRalphLoop();
+    res.json({ success: true, ...result });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

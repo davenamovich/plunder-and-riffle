@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { agentKeywordsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
+import { buildIcpFromUrl } from "../lib/moltis.js";
 
 const router = Router();
 
@@ -48,13 +49,8 @@ router.post("/icp/build", requireAuth, async (req, res) => {
       return;
     }
 
-    res.json({
-      keywords: ["bitcoin investment", "crypto portfolio", "passive income crypto", "btc accumulation", "digital asset strategy"],
-      painPoints: ["volatile markets", "don't know where to start", "missed the last bull run", "afraid of losing money", "complex tax implications"],
-      buyerIntentPhrases: ["how to buy bitcoin safely", "best crypto investment 2025", "passive crypto income", "bitcoin dollar cost average", "crypto for beginners"],
-      ctaAngles: ["Start with just $10", "No experience needed", "Let the AI do the heavy lifting", "Join 10,000+ investors", "Free to get started"],
-      targetAudience: "Adults 25-45 interested in financial independence, passive income, and building wealth through digital assets. They are tech-curious but not deeply technical.",
-    });
+    const icp = await buildIcpFromUrl(offerUrl);
+    res.json(icp);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

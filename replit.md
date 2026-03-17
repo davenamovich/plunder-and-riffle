@@ -52,11 +52,17 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 
 ### `artifacts/api-server` (`@workspace/api-server`)
 
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
+Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence. Also runs background worker and Ralph loop inside same process.
 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
+- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`, starts background worker
+- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health`
+- `src/lib/moltis.ts` — Moltis HTTP client (classify, draft, ICP). Falls back to keyword heuristic when `MOLTIS_BASE_URL`/`MOLTIS_API_KEY` not set
+- `src/lib/ralph.ts` — Ralph loop pipeline: `classifyRawLeads()`, `draftScoredLeads()`, `runRalphLoop()`. Lead stages: raw → scored → pending_approval → approved → posted
+- `src/lib/worker.ts` — Background scheduler (setInterval): expire slots (30s), classify (2m), draft (5m), reset daily caps (60m)
+- Admin endpoints: `GET /api/admin/ralph/status`, `POST /api/admin/ralph/run`
+- Lead endpoints: ingest, list, approve, reject, post, classify (manual), draft (manual)
+- Moltis env vars needed: `MOLTIS_BASE_URL`, `MOLTIS_API_KEY`, `MOLTIS_AGENT_ID` (defaults to "ralph")
 - Depends on: `@workspace/db`, `@workspace/api-zod`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
 - `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
