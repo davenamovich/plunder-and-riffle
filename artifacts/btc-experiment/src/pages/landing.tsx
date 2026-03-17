@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useGetAgentStats } from "@workspace/api-client-react";
-import { ArrowRight, Bot, Zap, Coins, Users } from "lucide-react";
+import { ArrowRight, Bot, Zap, Coins, Users, Link as LinkIcon, DollarSign, Shield } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { COMMON_ROLES } from "@/lib/icp";
 
@@ -240,6 +240,7 @@ export default function Landing() {
         </div>
       </section>
 
+      <KeyInsightCallout />
       <HowItWorksSection />
     </div>
   );
@@ -254,6 +255,69 @@ function StatCard({ value, label }: { value: number; label: string }) {
   );
 }
 
+function KeyInsightCallout() {
+  return (
+    <section className="py-12 px-4">
+      <div className="max-w-4xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="rounded-2xl border border-primary/30 bg-primary/5 p-8 md:p-10 relative overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary uppercase tracking-wider mb-5">
+              <Shield className="w-3.5 h-3.5" /> The Key Difference
+            </div>
+            <h2 className="text-2xl md:text-3xl font-bold mb-3">
+              The agent can't earn web2 commissions.{" "}
+              <span className="text-primary">You can.</span>
+            </h2>
+            <p className="text-muted-foreground text-base leading-relaxed mb-8 max-w-2xl">
+              When you join through this platform, you sign up to the agent's featured offer and save
+              your <strong className="text-foreground">own personal affiliate link</strong>. The agent then
+              drives traffic directly to that link — and every commission it generates belongs entirely to you.
+              The agent holds no web2 affiliate account. There's nothing to hide.
+            </p>
+            <div className="grid sm:grid-cols-3 gap-4">
+              {[
+                {
+                  icon: <LinkIcon className="w-5 h-5 text-primary" />,
+                  title: "Your Link",
+                  desc: "Sign up to the offer and you receive your own affiliate link to keep and track.",
+                },
+                {
+                  icon: <Bot className="w-5 h-5 text-primary" />,
+                  title: "Agent Drives Traffic",
+                  desc: "The AI agent promotes continuously across platforms and sends leads to your link.",
+                },
+                {
+                  icon: <DollarSign className="w-5 h-5 text-primary" />,
+                  title: "You Keep Every Dollar",
+                  desc: "Commissions from web2 sign-ups flow directly to you — the agent earns nothing.",
+                },
+              ].map((item) => (
+                <div
+                  key={item.title}
+                  className="flex flex-col gap-2 p-4 rounded-xl bg-background/40 border border-border/40"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                    {item.icon}
+                  </div>
+                  <p className="font-semibold text-sm">{item.title}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
 function HowItWorksSection() {
   return (
     <section className="py-24 bg-card/50 relative">
@@ -261,27 +325,27 @@ function HowItWorksSection() {
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">How The Experiment Works</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            A transparent, verifiable loop where value is proven before you ever have to scale.
+            A transparent, verifiable loop where your earning potential is proven before you ever have to scale.
           </p>
         </div>
         <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           <StepCard
             num={1}
-            icon={<Bot className="w-12 h-12 mx-auto text-primary mb-6 mt-4" />}
-            title="The Agent Works"
-            body="Our autonomous agent constantly engages across platforms, generating high-quality leads and driving traffic back to the platform."
+            icon={<LinkIcon className="w-12 h-12 mx-auto text-primary mb-6 mt-4" />}
+            title="Sign Up to the Offer"
+            body="Join the agent's featured web2 platform. You'll receive your own personal affiliate link — saved directly to your account."
           />
           <StepCard
             num={2}
-            icon={<Users className="w-12 h-12 mx-auto text-primary mb-6 mt-4" />}
-            title="You Get The Traffic"
-            body="Enter your email to unlock a free 24-hour slot in the agent's rotator. All traffic flows directly to your personalized links."
+            icon={<Bot className="w-12 h-12 mx-auto text-primary mb-6 mt-4" />}
+            title="The Agent Works For You"
+            body="Our autonomous AI agent runs 24/7 across platforms, driving targeted traffic directly to your referral link — not the agent's."
           />
           <StepCard
             num={3}
-            icon={<Coins className="w-12 h-12 mx-auto text-primary mb-6 mt-4" />}
-            title="Scale What Works"
-            body="Once the free traffic proves its value, you can optionally purchase paid rotator slots to capture a higher volume of the agent's output."
+            icon={<DollarSign className="w-12 h-12 mx-auto text-primary mb-6 mt-4" />}
+            title="You Keep Every Commission"
+            body="The agent holds no web2 affiliate account. Every signup your link generates earns you the commission — 100%, no split."
           />
         </div>
       </div>

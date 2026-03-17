@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Activity, Clock, Plus, Copy, Link as LinkIcon,
   RefreshCw, CheckCircle2, ArrowRight,
-  Users, Coins, ExternalLink
+  Users, Coins, ExternalLink, DollarSign, Shield
 } from "lucide-react";
 import { formatDistanceToNow, isPast } from "date-fns";
 import { motion } from "framer-motion";
@@ -249,13 +249,28 @@ export default function Dashboard() {
 
           {/* Offers Tab */}
           <TabsContent value="offers" className="space-y-4">
+            {/* Key insight banner */}
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex gap-3 items-start">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <DollarSign className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm text-foreground mb-0.5">Your affiliate link — your commission</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Sign up to an offer below and save your personal affiliate link. When the agent drives traffic through
+                  your rotator slot, leads land on <strong className="text-foreground">your link</strong> — any
+                  conversions earn <strong className="text-foreground">you</strong> the commission. The agent holds
+                  no web2 affiliate account and earns nothing from these offers.
+                </p>
+              </div>
+            </div>
             <div className="grid md:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <CheckCircle2 className="w-5 h-5 text-primary" /> My Joined Offers
                   </CardTitle>
-                  <CardDescription>These offers appear on your personal rotator page.</CardDescription>
+                  <CardDescription>Your personal affiliate link for each offer — commissions go directly to you.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {myOffersRes?.offers && myOffersRes.offers.length > 0 ? (
@@ -268,6 +283,9 @@ export default function Dashboard() {
                               <CheckCircle2 className="w-3 h-3 mr-1 text-primary" /> Joined
                             </Badge>
                           </div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1.5">
+                            Your Affiliate Link
+                          </p>
                           <div className="flex gap-2">
                             <Input value={offer.inheritedRefUrl || offer.offerUrl} readOnly className="text-xs h-8 font-mono" />
                             <Button size="sm" variant="secondary" className="h-8 shrink-0" onClick={() => handleCopy(offer.inheritedRefUrl || offer.offerUrl)}>
@@ -288,7 +306,7 @@ export default function Dashboard() {
                   <CardTitle className="flex items-center gap-2">
                     <Plus className="w-5 h-5 text-primary" /> Available Offers
                   </CardTitle>
-                  <CardDescription>Join qualifying offers to unlock free 24h rotator slots.</CardDescription>
+                  <CardDescription>Join an offer to save your affiliate link and unlock a free 24h rotator slot.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {availableOffers.length > 0 ? (
