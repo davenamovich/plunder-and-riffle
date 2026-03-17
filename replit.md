@@ -57,12 +57,12 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`, starts background worker
 - Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health`
-- `src/lib/moltis.ts` — Moltis HTTP client (classify, draft, ICP). Falls back to keyword heuristic when `MOLTIS_BASE_URL`/`MOLTIS_API_KEY` not set
-- `src/lib/ralph.ts` — Ralph loop pipeline: `classifyRawLeads()`, `draftScoredLeads()`, `runRalphLoop()`. Lead stages: raw → scored → pending_approval → approved → posted
-- `src/lib/worker.ts` — Background scheduler (setInterval): expire slots (30s), classify (2m), draft (5m), reset daily caps (60m)
-- Admin endpoints: `GET /api/admin/ralph/status`, `POST /api/admin/ralph/run`
+- `src/lib/moltis.ts` — Chutes.ai LLM client (OpenAI-compatible, `https://llm.chutes.ai/v1`). **Batch API**: N leads → 1 call. Daily budget tracker (DB-backed, hard stop at 1900/2000). Falls back to keyword heuristic when `CHUTES_API_KEY` not set. Exports: `batchClassifyLeads()`, `batchDraftResponses()`, `classifyLead()`, `draftResponse()`, `buildIcpFromUrl()`, `getDailyUsage()`, `hasBudget()`, `moltisStatusWithUsage()`
+- `src/lib/ralph.ts` — Ralph loop pipeline: `classifyRawLeads()`, `draftScoredLeads()`, `runRalphLoop()`. Lead stages: raw → scored → pending_approval → approved → posted. Batch size: 20 leads per API call.
+- `src/lib/worker.ts` — Background scheduler (setInterval): expire slots (30s), classify batch (15m), draft batch (20m), reset daily caps (60m). Budget-aware scheduling.
+- Admin endpoints: `GET /api/admin/ralph/status` (includes usage), `POST /api/admin/ralph/run`, `GET /api/admin/usage`
 - Lead endpoints: ingest, list, approve, reject, post, classify (manual), draft (manual)
-- Moltis env vars needed: `MOLTIS_BASE_URL`, `MOLTIS_API_KEY`, `MOLTIS_AGENT_ID` (defaults to "ralph")
+- Env vars: `CHUTES_API_KEY`, `CHUTES_BASE_URL` (default: https://llm.chutes.ai/v1), `CHUTES_MODEL` (default: chutesai/Mistral-Small-3.2-24B-Instruct-2506), `CHUTES_DAILY_CAP` (default: 2000)
 - Depends on: `@workspace/db`, `@workspace/api-zod`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
 - `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)

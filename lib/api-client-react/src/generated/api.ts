@@ -2468,3 +2468,66 @@ export const useCronTick = <
 > => {
   return useMutation(getCronTickMutationOptions(options));
 };
+
+// ─── Reject Lead ──────────────────────────────────────────────────────────────
+
+export const rejectLead = async (id: string, body: { reason: string }, options?: RequestInit) =>
+  customFetch<{ success: boolean }>(`/api/leads/${id}/reject`, {
+    ...options, method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(body),
+  });
+
+export const useRejectLead = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof rejectLead>>, TError, { id: string; reason: string }, TContext>;
+}) => useMutation<Awaited<ReturnType<typeof rejectLead>>, TError, { id: string; reason: string }, TContext>({
+  mutationFn: ({ id, reason }) => rejectLead(id, { reason }),
+  ...options?.mutation,
+});
+
+// ─── Ralph Status ─────────────────────────────────────────────────────────────
+
+export interface RalphStatusResponse {
+  moltis: { configured: boolean; baseUrl: string; model: string; dailyCap: number; usage: { date: string; used: number; remaining: number; cap: number } };
+  leads: Record<string, number>;
+}
+
+export const getRalphStatus = async (options?: RequestInit): Promise<RalphStatusResponse> =>
+  customFetch<RalphStatusResponse>("/api/admin/ralph/status", options);
+
+export const useGetRalphStatus = <TError = ErrorType<unknown>>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getRalphStatus>>, TError>;
+}) => useQuery<Awaited<ReturnType<typeof getRalphStatus>>, TError>({
+  queryKey: ["getRalphStatus"],
+  queryFn: () => getRalphStatus(),
+  ...options?.query,
+});
+
+// ─── Run Ralph ────────────────────────────────────────────────────────────────
+
+export interface RunRalphResponse { success: boolean; classified: number; classifiedRejected: number; drafted: number }
+
+export const runRalph = async (options?: RequestInit): Promise<RunRalphResponse> =>
+  customFetch<RunRalphResponse>("/api/admin/ralph/run", { ...options, method: "POST" });
+
+export const useRunRalph = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<RunRalphResponse, TError, void, TContext>;
+}) => useMutation<RunRalphResponse, TError, void, TContext>({
+  mutationFn: () => runRalph(),
+  ...options?.mutation,
+});
+
+// ─── Admin Usage ──────────────────────────────────────────────────────────────
+
+export interface AdminUsageResponse { date: string; used: number; remaining: number; cap: number }
+
+export const getAdminUsage = async (options?: RequestInit): Promise<AdminUsageResponse> =>
+  customFetch<AdminUsageResponse>("/api/admin/usage", options);
+
+export const useGetAdminUsage = <TError = ErrorType<unknown>>(options?: {
+  query?: UseQueryOptions<AdminUsageResponse, TError>;
+}) => useQuery<AdminUsageResponse, TError>({
+  queryKey: ["getAdminUsage"],
+  queryFn: () => getAdminUsage(),
+  ...options?.query,
+});
