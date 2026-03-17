@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { getRoleCopy, normalizeRole } from "@/lib/icp";
+import { getRoleCopy } from "@/lib/icp";
 import { ArrowRight, CheckCircle, Loader2, ShieldCheck, Zap } from "lucide-react";
 
 const LOADING_STEPS = [
-  { id: "account", label: "Creating your account…" },
+  { id: "account", label: "Verifying your account…" },
   { id: "wallet", label: "Setting up your wallet path…" },
   { id: "slot", label: "Activating your 24-hour slot…" },
   { id: "done", label: "You're in the system." },
@@ -19,32 +19,38 @@ export default function IcpPage() {
   const rawRole = params.get("role") || "Business Owner";
   const copy = getRoleCopy(rawRole);
 
-  const { setToken } = useAuth();
+  const { login, isAuthenticated, user, isLoading } = useAuth();
   const [, navigate] = useLocation();
 
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "waiting_privy" | "activating" | "done" | "error">("idle");
   const [loadingStep, setLoadingStep] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
+  const activationFiredRef = useRef(false);
 
-  // Auto-advance loading steps
+  // Auto-advance loading steps during activation
   useEffect(() => {
-    if (status !== "loading") return;
-    const steps = [0, 900, 1800, 2700];
-    const timers = steps.map((delay, i) =>
-      setTimeout(() => setLoadingStep(i), delay)
-    );
+    if (status !== "activating") return;
+    const delays = [0, 900, 1800, 2700];
+    const timers = delays.map((delay, i) => setTimeout(() => setLoadingStep(i), delay));
     return () => timers.forEach(clearTimeout);
   }, [status]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email.trim() || !email.includes("@")) {
-      setErrorMsg("Please enter a valid email.");
-      return;
-    }
+  // After Privy auth completes, run the onboarding activation
+  useEffect(() => {
+    if (
+      status !== "waiting_privy" ||
+      !isAuthenticated ||
+      !user ||
+      isLoading ||
+      activationFiredRef.current
+    ) return;
 
-    setStatus("loading");
+    activationFiredRef.current = true;
+    runActivation(user.email);
+  }, [status, isAuthenticated, user, isLoading]);
+
+  async function runActivation(email: string) {
+    setStatus("activating");
     setLoadingStep(0);
     setErrorMsg("");
 
@@ -52,36 +58,43 @@ export default function IcpPage() {
       const resp = await fetch("/api/onboarding/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          role: rawRole,
-        }),
+        body: JSON.stringify({ email, role: rawRole }),
       });
       const data = await resp.json();
 
       if (!resp.ok || !data.ok) {
-        throw new Error(data.error || "Something went wrong. Please try again.");
+        throw new Error(data.error || "Activation failed. Please try again.");
       }
 
-      // Store token — useAuth will pick it up and hydrate the user
-      if (data.token) {
-        setToken(data.token);
-      }
-
-      // Finish loading animation
       setLoadingStep(3);
       setStatus("done");
 
       setTimeout(() => {
-        navigate(
-          `/agent/ralph?new=1&role=${encodeURIComponent(rawRole)}`
-        );
+        navigate(`/agent/ralph?new=1&role=${encodeURIComponent(rawRole)}`);
       }, 1400);
     } catch (err: any) {
+      activationFiredRef.current = false;
       setStatus("error");
       setErrorMsg(err.message || "Something went wrong. Please try again.");
     }
   }
+
+  function handleActivate() {
+    if (isAuthenticated && user) {
+      // Already logged in — activate directly
+      if (!activationFiredRef.current) {
+        activationFiredRef.current = true;
+        runActivation(user.email);
+      }
+    } else {
+      // Open Privy modal — activation fires after auth succeeds
+      setStatus("waiting_privy");
+      login();
+    }
+  }
+
+  const showLoading = status === "waiting_privy" || status === "activating" || status === "done";
+  const showError = status === "error";
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -96,7 +109,7 @@ export default function IcpPage() {
       <div className="flex-1 flex items-start justify-center py-12 px-4">
         <div className="w-full max-w-xl">
 
-          {/* Headline block */}
+          {/* Headline */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -165,7 +178,7 @@ export default function IcpPage() {
             </p>
             <ul className="space-y-3">
               {[
-                "Your account is created — no password required",
+                "Enter your email — no password ever required",
                 "A wallet path is reserved for you (no crypto knowledge needed)",
                 "You're placed into the main agent's traffic rotator",
                 "The agent works. You watch the proof.",
@@ -184,42 +197,43 @@ export default function IcpPage() {
             </div>
           </motion.div>
 
-          {/* Email form or loading state */}
+          {/* CTA / loading state */}
           <AnimatePresence mode="wait">
-            {status === "idle" || status === "error" ? (
-              <motion.form
-                key="form"
+            {!showLoading && (
+              <motion.div
+                key="cta"
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.35, delay: 0.32 }}
-                onSubmit={handleSubmit}
                 className="space-y-3"
               >
-                <input
-                  type="email"
-                  placeholder="Enter your email to activate"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (errorMsg) setErrorMsg("");
-                  }}
-                  required
-                  autoFocus
-                  className="w-full bg-card/60 border border-border rounded-xl px-4 py-3.5 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary backdrop-blur-sm"
-                />
-                {errorMsg && (
-                  <p className="text-sm text-destructive px-1">{errorMsg}</p>
+                {showError && (
+                  <p className="text-sm text-destructive text-center px-1 py-2 bg-destructive/10 rounded-lg">
+                    {errorMsg}
+                  </p>
                 )}
-                <Button type="submit" size="lg" className="w-full h-14 text-lg font-semibold">
-                  Activate My 24 Hours{" "}
-                  <ArrowRight className="ml-2 h-5 w-5" />
+                <Button
+                  size="lg"
+                  className="w-full h-14 text-lg font-semibold"
+                  onClick={handleActivate}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <>
+                      Activate My 24 Hours <ArrowRight className="ml-2 h-5 w-5" />
+                    </>
+                  )}
                 </Button>
                 <p className="text-xs text-muted-foreground text-center pt-1">
-                  No credit card. No password. No catch.
+                  No credit card. No password. Just your email.
                 </p>
-              </motion.form>
-            ) : status === "loading" || status === "done" ? (
+              </motion.div>
+            )}
+
+            {showLoading && (
               <motion.div
                 key="loading"
                 initial={{ opacity: 0, y: 12 }}
@@ -227,36 +241,45 @@ export default function IcpPage() {
                 exit={{ opacity: 0 }}
                 className="glass-panel rounded-2xl p-6 border border-primary/30"
               >
-                <div className="space-y-4">
-                  {LOADING_STEPS.map((step, i) => {
-                    const isActive = i === loadingStep;
-                    const isDone = i < loadingStep;
-                    return (
-                      <div key={step.id} className="flex items-center gap-3">
-                        <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
-                          {isDone ? (
-                            <CheckCircle className="h-5 w-5 text-primary" />
-                          ) : isActive ? (
-                            <Loader2 className="h-5 w-5 text-primary animate-spin" />
-                          ) : (
-                            <div className="w-4 h-4 rounded-full border-2 border-border" />
-                          )}
+                {status === "waiting_privy" ? (
+                  <div className="flex items-center gap-3 justify-center py-2">
+                    <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                    <span className="text-sm text-foreground font-medium">
+                      Complete sign-in to continue…
+                    </span>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {LOADING_STEPS.map((step, i) => {
+                      const isActive = i === loadingStep;
+                      const isDone = i < loadingStep;
+                      return (
+                        <div key={step.id} className="flex items-center gap-3">
+                          <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
+                            {isDone ? (
+                              <CheckCircle className="h-5 w-5 text-primary" />
+                            ) : isActive ? (
+                              <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                            ) : (
+                              <div className="w-4 h-4 rounded-full border-2 border-border" />
+                            )}
+                          </div>
+                          <span
+                            className={`text-sm font-medium transition-colors ${
+                              isDone
+                                ? "text-primary"
+                                : isActive
+                                ? "text-foreground"
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {step.label}
+                          </span>
                         </div>
-                        <span
-                          className={`text-sm font-medium transition-colors ${
-                            isDone
-                              ? "text-primary"
-                              : isActive
-                              ? "text-foreground"
-                              : "text-muted-foreground"
-                          }`}
-                        >
-                          {step.label}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
                 {status === "done" && (
                   <motion.p
                     initial={{ opacity: 0 }}
@@ -267,7 +290,7 @@ export default function IcpPage() {
                   </motion.p>
                 )}
               </motion.div>
-            ) : null}
+            )}
           </AnimatePresence>
 
           {/* Proof line */}
