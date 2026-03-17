@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useGetAgentStats } from "@workspace/api-client-react";
-import { ArrowRight, Bot, Zap, Coins, Users, Link as LinkIcon, DollarSign, Shield } from "lucide-react";
+import { ArrowRight, Bot, Zap, Coins, Users, Link as LinkIcon, DollarSign, Shield, Layers, Repeat2, Bitcoin, Clock, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { COMMON_ROLES } from "@/lib/icp";
 
@@ -241,6 +241,7 @@ export default function Landing() {
       </section>
 
       <KeyInsightCallout />
+      <IncomeStackSection />
       <HowItWorksSection />
     </div>
   );
@@ -312,6 +313,130 @@ function KeyInsightCallout() {
               ))}
             </div>
           </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+const INCOME_STREAMS = [
+  {
+    num: 1,
+    icon: Clock,
+    color: "text-primary",
+    bg: "bg-primary/10 border-primary/20",
+    title: "Free 24-Hour Slot — Per Agent",
+    desc: "Every agent in the fleet gives you a free 24-hour spin in their rotator. The more agents, the more exposure — all starting the moment you join.",
+  },
+  {
+    num: 2,
+    icon: LinkIcon,
+    color: "text-amber-400",
+    bg: "bg-amber-500/10 border-amber-500/20",
+    title: "Your Offer Affiliate Link",
+    desc: "Sign up to the agent's featured offer and save your personal affiliate link. Traffic the agent drives to your slot lands on that link — commissions go straight to you.",
+  },
+  {
+    num: 3,
+    icon: Layers,
+    color: "text-blue-400",
+    bg: "bg-blue-500/10 border-blue-500/20",
+    title: "Offers Stack as You Grow",
+    desc: "Join additional offers and each one adds another parallel income stream. One slot can represent multiple offers — they don't replace each other, they stack.",
+  },
+  {
+    num: 4,
+    icon: Repeat2,
+    color: "text-purple-400",
+    bg: "bg-purple-500/10 border-purple-500/20",
+    title: "Your Personal Rotator",
+    desc: "Every direct referral you bring in appears in your personal rotator. Visitors to your link cycle through your referrals — driving traffic deeper into your network.",
+  },
+  {
+    num: 5,
+    icon: TrendingUp,
+    color: "text-green-400",
+    bg: "bg-green-500/10 border-green-500/20",
+    title: "Referral Chain Depth",
+    desc: "When your referral joins and earns, that activity flows back through your chain. Their offers, their rotator slots, their sign-ups — all add to the depth of your network.",
+  },
+];
+
+function IncomeStackSection() {
+  return (
+    <section className="py-16 px-4">
+      <div className="max-w-5xl mx-auto">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="text-center mb-12"
+        >
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary uppercase tracking-wider mb-5">
+            <Bitcoin className="w-3.5 h-3.5" /> The Income Stack
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+            One referral.{" "}
+            <span className="text-primary">Five income streams.</span>
+          </h2>
+          <p className="text-muted-foreground max-w-2xl mx-auto text-base">
+            Every agent gives you <strong className="text-foreground">24 free hours</strong> in their rotator.
+            Offers start stacking from day one. A single referral activates all five streams — for them
+            and for you through the chain.
+          </p>
+        </motion.div>
+
+        {/* Stream cards */}
+        <div className="grid md:grid-cols-5 gap-3 mb-8">
+          {INCOME_STREAMS.map((stream, i) => (
+            <motion.div
+              key={stream.num}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.4, delay: i * 0.08 }}
+              className="glass-panel rounded-2xl p-5 flex flex-col gap-3 relative group hover:-translate-y-1 transition-transform duration-300"
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${stream.bg} flex-shrink-0`}>
+                <stream.icon className={`w-5 h-5 ${stream.color}`} />
+              </div>
+              <div className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-background border border-border flex items-center justify-center text-xs font-bold text-primary">
+                {stream.num}
+              </div>
+              <div>
+                <p className="font-semibold text-sm text-foreground mb-1 leading-snug">{stream.title}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{stream.desc}</p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Plus BTC experiment referral callout */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.45 }}
+          className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4"
+        >
+          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
+            <Bitcoin className="w-6 h-6 text-amber-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-base text-foreground mb-0.5">
+              Plus: The BTC Experiment Referral
+            </p>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              On top of the five stacking streams, every referral you bring into the BTC Experiment
+              itself earns you direct credit inside the platform — separate from the web2 offer commissions.
+              Your chain grows. Your credit grows with it.
+            </p>
+          </div>
+          <Button size="sm" className="flex-shrink-0 h-9" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+            Start Stacking <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+          </Button>
         </motion.div>
       </div>
     </section>
