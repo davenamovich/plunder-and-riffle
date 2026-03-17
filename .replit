@@ -17,6 +17,26 @@ env = { "CI" = "true" }
 [workflows]
 runButton = "Project"
 
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Moltis: AI Gateway"
+
+[[workflows.workflow]]
+name = "Moltis: AI Gateway"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "export PATH=\"$PATH:$HOME/.local/bin\"; moltis gateway --no-tls --port 13131"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
@@ -29,3 +49,9 @@ timeoutMs = 20000
 
 [userenv.shared]
 VITE_PRIVY_APP_ID = "cmmu54ilp045n0dk4c1h0nvpv"
+CHUTES_BASE_URL = "https://llm.chutes.ai/v1"
+CHUTES_MODEL = "chutesai/Mistral-Small-3.2-24B-Instruct-2506"
+
+[nix]
+channel = "stable-25_05"
+packages = ["libgcc"]
