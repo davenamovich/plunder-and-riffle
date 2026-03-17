@@ -11,6 +11,7 @@ import adminRouter from "./admin.js";
 import cronRouter from "./cron.js";
 import trackingRouter from "./tracking.js";
 import onboardingRouter from "./onboarding.js";
+import myAgentRouter from "./my-agent.js";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(keywordsRouter);
 router.use(adminRouter);
 router.use(cronRouter);
 router.use(trackingRouter);
+router.use(myAgentRouter);
 
 export default router;

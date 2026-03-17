@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect } from "wouter";
 import {
@@ -36,7 +37,8 @@ import {
   ShieldAlert, Trash2, CheckCircle, XCircle, Bot, Zap, Play,
   RefreshCw, Activity, Users, Clock, ChevronDown, ChevronUp, Eye,
   AlertTriangle, ToggleLeft, ToggleRight, Mail, Send, BarChart2,
-  Check, Ban, Copy, Plus, Minus
+  Check, Ban, Copy, Plus, Minus, Wallet, Gem, PauseCircle, PlayCircle,
+  Settings2, ExternalLink, Plug, Link2
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -251,7 +253,7 @@ const PIPELINE_STAGES = [
 // ─── Main Admin Page ───────────────────────────────────────────────────────────
 
 export default function Admin() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, token } = useAuth();
   const { toast } = useToast();
   const [leadStatusFilter, setLeadStatusFilter] = useState("pending_approval");
   const [rejectReason, setRejectReason] = useState("");
@@ -383,7 +385,7 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="ralph" className="w-full">
-        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-6 h-11 mb-8">
+        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-8 h-11 mb-8">
           <TabsTrigger value="ralph" className="flex items-center gap-1.5">
             <Bot className="w-3.5 h-3.5" /> Ralph
           </TabsTrigger>
@@ -401,6 +403,8 @@ export default function Admin() {
           <TabsTrigger value="rotator">Rotator</TabsTrigger>
           <TabsTrigger value="users"><Users className="w-3.5 h-3.5 mr-1" />Users</TabsTrigger>
           <TabsTrigger value="settings">Config</TabsTrigger>
+          <TabsTrigger value="agents"><Bot className="w-3.5 h-3.5 mr-1" />Agents</TabsTrigger>
+          <TabsTrigger value="wallets"><Wallet className="w-3.5 h-3.5 mr-1" />Wallets</TabsTrigger>
         </TabsList>
 
         {/* ── RALPH TAB ── */}
@@ -1110,7 +1114,399 @@ export default function Admin() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ── AGENTS TAB ── */}
+        <TabsContent value="agents">
+          <AgentsFleetTab token={token} />
+        </TabsContent>
+
+        {/* ── WALLETS TAB ── */}
+        <TabsContent value="wallets">
+          <WalletsTab token={token} />
+        </TabsContent>
+
       </Tabs>
+    </div>
+  );
+}
+
+// ─── Agents Fleet Tab ──────────────────────────────────────────────────────────
+
+function AgentsFleetTab({ token }: { token: string | null }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    slug: "", name: "", description: "", offerUrl: "",
+    freeSlotCapacity: 25, paidSlotCapacity: 25,
+    slotDurationHours: 24, dailyCap: 100, paidSlotPrice: 9.99,
+  });
+
+  const headers = token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+
+  const { data, isLoading, refetch } = useQuery<{ agents: any[] }>({
+    queryKey: ["admin-fleet"],
+    queryFn: () => fetch("/api/admin/agents-fleet", { headers }).then(r => r.json()),
+    staleTime: 20_000,
+  });
+
+  const togglePause = useMutation({
+    mutationFn: (id: string) => fetch(`/api/admin/agents/${id}/toggle-pause`, { method: "POST", headers }).then(r => r.json()),
+    onSuccess: () => { toast({ title: "Updated" }); qc.invalidateQueries({ queryKey: ["admin-fleet"] }); },
+  });
+
+  const mintAgent = useMutation({
+    mutationFn: (id: string) => fetch(`/api/admin/agents/${id}/mint`, { method: "POST", headers }).then(r => r.json()),
+    onSuccess: (data: any) => { toast({ title: data.message || "Mint updated" }); qc.invalidateQueries({ queryKey: ["admin-fleet"] }); },
+  });
+
+  const deleteAgent = useMutation({
+    mutationFn: (id: string) => fetch(`/api/admin/agents/${id}`, { method: "DELETE", headers }).then(r => r.json()),
+    onSuccess: () => { toast({ title: "Agent deleted" }); qc.invalidateQueries({ queryKey: ["admin-fleet"] }); },
+  });
+
+  const saveEdit = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      fetch(`/api/admin/agents/${id}`, { method: "PUT", headers, body: JSON.stringify(data) }).then(r => r.json()),
+    onSuccess: () => { toast({ title: "Saved" }); setEditingId(null); qc.invalidateQueries({ queryKey: ["admin-fleet"] }); },
+  });
+
+  const createAgent = useMutation({
+    mutationFn: (data: any) => fetch("/api/admin/agents", { method: "POST", headers, body: JSON.stringify(data) }).then(r => r.json()),
+    onSuccess: (res: any) => {
+      if (res.error) { toast({ title: "Error", description: res.error, variant: "destructive" }); return; }
+      toast({ title: "Agent created", description: res.agent?.name });
+      setShowCreate(false);
+      setCreateForm({ slug: "", name: "", description: "", offerUrl: "", freeSlotCapacity: 25, paidSlotCapacity: 25, slotDurationHours: 24, dailyCap: 100, paidSlotPrice: 9.99 });
+      qc.invalidateQueries({ queryKey: ["admin-fleet"] });
+    },
+  });
+
+  const agents: any[] = data?.agents ?? [];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">Agent Fleet</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">{agents.length} agent(s) registered. Each has its own rotator, ICP context, and Composio connection.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => refetch()}><RefreshCw className="w-3.5 h-3.5 mr-1" />Refresh</Button>
+          <Button size="sm" onClick={() => setShowCreate(v => !v)}><Plus className="w-3.5 h-3.5 mr-1" />New Agent</Button>
+        </div>
+      </div>
+
+      {/* Create form */}
+      {showCreate && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader className="pb-3"><CardTitle className="text-base">Create Agent</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid md:grid-cols-2 gap-3">
+              {[
+                { key: "slug", label: "Slug (URL-safe)", placeholder: "my-agent" },
+                { key: "name", label: "Name", placeholder: "Agent Name" },
+                { key: "offerUrl", label: "Offer URL", placeholder: "https://…" },
+                { key: "description", label: "Description", placeholder: "What this agent does" },
+              ].map(f => (
+                <div key={f.key} className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">{f.label}</label>
+                  <Input placeholder={f.placeholder} value={(createForm as any)[f.key]} onChange={e => setCreateForm({ ...createForm, [f.key]: e.target.value })} />
+                </div>
+              ))}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Free Slot Capacity</label>
+                <Input type="number" value={createForm.freeSlotCapacity} onChange={e => setCreateForm({ ...createForm, freeSlotCapacity: Number(e.target.value) })} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Paid Slot Price ($)</label>
+                <Input type="number" step="0.01" value={createForm.paidSlotPrice} onChange={e => setCreateForm({ ...createForm, paidSlotPrice: Number(e.target.value) })} />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button size="sm" onClick={() => createAgent.mutate(createForm)} disabled={createAgent.isPending}>
+                {createAgent.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1" /> : <Plus className="w-3.5 h-3.5 mr-1" />} Create Agent
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowCreate(false)}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isLoading ? (
+        <div className="space-y-3">{[1,2].map(i => <Skeleton key={i} className="h-24 w-full" />)}</div>
+      ) : agents.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground"><Bot className="w-10 h-10 mx-auto mb-3 opacity-30" /><p>No agents found. Create one above.</p></div>
+      ) : (
+        <div className="space-y-3">
+          {agents.map((agent: any) => (
+            <Card key={agent.id} className={`border-border/50 transition-colors ${agent.isPaused ? "opacity-70" : ""}`}>
+              <div className="p-4">
+                <div className="flex items-start gap-3">
+                  {/* Avatar / icon */}
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                    {agent.avatarUrl
+                      ? <img src={agent.avatarUrl} className="w-full h-full object-cover rounded-xl" alt={agent.name} />
+                      : <Bot className="w-5 h-5 text-primary" />}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold">{agent.name}</span>
+                      <span className="text-xs text-muted-foreground font-mono">/{agent.slug}</span>
+                      {agent.isPaused
+                        ? <Badge variant="secondary" className="text-xs">Paused</Badge>
+                        : <Badge className="text-xs bg-green-500/15 text-green-400 border border-green-500/30">Active</Badge>}
+                      {agent.nftMintEnabled && (
+                        <Badge className="text-xs bg-violet-500/15 text-violet-400 border border-violet-500/30">
+                          <Gem className="w-2.5 h-2.5 mr-0.5" /> NFT Minted
+                        </Badge>
+                      )}
+                      {agent.composioEntityId && (
+                        <Badge variant="outline" className="text-xs">
+                          <Plug className="w-2.5 h-2.5 mr-0.5" /> Composio
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                      <span>Free: {agent.activeFreeSlots}/{agent.freeSlotCapacity}</span>
+                      <span>Paid: {agent.activePaidSlots}/{agent.paidSlotCapacity}</span>
+                      <span>Clicks: {agent.totalClicks}</span>
+                      <span>Signups: {agent.totalSignups}</span>
+                      <span>Today: {agent.dailyLeadCount} leads</span>
+                      {agent.twitterHandle && <span className="text-primary">𝕏 @{agent.twitterHandle}</span>}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                    <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                      onClick={() => { setExpanded(expanded === agent.id ? null : agent.id); setEditingId(null); }}>
+                      {expanded === agent.id ? <ChevronUp className="w-3 h-3" /> : <Settings2 className="w-3 h-3" />}
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                      onClick={() => togglePause.mutate(agent.id)} disabled={togglePause.isPending}>
+                      {agent.isPaused ? <PlayCircle className="w-3 h-3 text-green-400" /> : <PauseCircle className="w-3 h-3 text-amber-400" />}
+                    </Button>
+                    <Button size="sm" variant="outline" className={`h-7 px-2 text-xs ${agent.nftMintEnabled ? "border-violet-500/40 text-violet-400" : ""}`}
+                      onClick={() => mintAgent.mutate(agent.id)} disabled={mintAgent.isPending} title={agent.nftMintEnabled ? "Revoke NFT mint" : "Mint NFT"}>
+                      <Gem className="w-3 h-3" />
+                    </Button>
+                    {agent.slug !== "ralph" && (
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                        onClick={() => { if (confirm(`Delete "${agent.name}"?`)) deleteAgent.mutate(agent.id); }}>
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Expanded: edit profile + ICP + Composio */}
+                {expanded === agent.id && (
+                  <div className="mt-4 pt-4 border-t border-border/40 space-y-4">
+                    {editingId !== agent.id ? (
+                      <>
+                        {/* Profile read view */}
+                        <div className="grid md:grid-cols-3 gap-3 text-xs">
+                          <div><p className="text-muted-foreground mb-0.5">Offer URL</p><a href={agent.offerUrl} target="_blank" className="text-primary hover:underline truncate block">{agent.offerUrl || "—"}</a></div>
+                          <div><p className="text-muted-foreground mb-0.5">Twitter</p><p>{agent.twitterHandle ? `@${agent.twitterHandle}` : "—"}</p></div>
+                          <div><p className="text-muted-foreground mb-0.5">LinkedIn</p><p className="truncate">{agent.linkedinUrl || "—"}</p></div>
+                          <div><p className="text-muted-foreground mb-0.5">Composio Entity ID</p><p className="font-mono">{agent.composioEntityId || "—"}</p></div>
+                          <div><p className="text-muted-foreground mb-0.5">Slot Duration</p><p>{agent.slotDurationHours}h</p></div>
+                          <div><p className="text-muted-foreground mb-0.5">Paid Slot Price</p><p>${agent.paidSlotPrice}</p></div>
+                          <div className="md:col-span-3"><p className="text-muted-foreground mb-0.5">Persona</p><p className="italic">{agent.persona || "—"}</p></div>
+                          <div className="md:col-span-3"><p className="text-muted-foreground mb-0.5">ICP Context (JSON)</p><p className="font-mono bg-muted/20 p-2 rounded text-[10px] max-h-20 overflow-auto">{agent.icpContext || "—"}</p></div>
+                          {agent.nftMintEnabled && <div className="md:col-span-3"><p className="text-muted-foreground mb-0.5">NFT Token ID</p><p className="font-mono text-violet-400">{agent.nftTokenId || "—"}</p></div>}
+                        </div>
+                        <Button size="sm" variant="outline" onClick={() => { setEditingId(agent.id); setEditForm({ ...agent }); }}>
+                          <Settings2 className="w-3 h-3 mr-1" /> Edit Profile
+                        </Button>
+                      </>
+                    ) : (
+                      /* Edit form */
+                      <div className="space-y-3">
+                        <p className="text-sm font-medium">Editing: {agent.name}</p>
+                        <div className="grid md:grid-cols-2 gap-3">
+                          {[
+                            { key: "name", label: "Name" },
+                            { key: "twitterHandle", label: "Twitter Handle (no @)" },
+                            { key: "linkedinUrl", label: "LinkedIn URL" },
+                            { key: "avatarUrl", label: "Avatar URL" },
+                            { key: "offerUrl", label: "Offer URL" },
+                            { key: "composioEntityId", label: "Composio Entity ID" },
+                          ].map(f => (
+                            <div key={f.key} className="space-y-1">
+                              <label className="text-xs font-medium text-muted-foreground">{f.label}</label>
+                              <Input value={editForm[f.key] || ""} onChange={e => setEditForm({ ...editForm, [f.key]: e.target.value })} />
+                            </div>
+                          ))}
+                          <div className="space-y-1 md:col-span-2">
+                            <label className="text-xs font-medium text-muted-foreground">Persona (shown to Moltis)</label>
+                            <Textarea rows={2} value={editForm.persona || ""} onChange={e => setEditForm({ ...editForm, persona: e.target.value })} />
+                          </div>
+                          <div className="space-y-1 md:col-span-2">
+                            <label className="text-xs font-medium text-muted-foreground">ICP Context JSON <span className="text-primary">(keywords, painPoints arrays)</span></label>
+                            <Textarea rows={3} className="font-mono text-xs" placeholder='{"keywords":["btc","crypto"],"painPoints":["High ad costs"]}' value={editForm.icpContext || ""} onChange={e => setEditForm({ ...editForm, icpContext: e.target.value })} />
+                          </div>
+                          <div className="space-y-1 md:col-span-2">
+                            <label className="text-xs font-medium text-muted-foreground">Post Templates JSON (array of strings)</label>
+                            <Textarea rows={3} className="font-mono text-xs" placeholder='["Template 1…","Template 2…"]' value={editForm.postTemplates || ""} onChange={e => setEditForm({ ...editForm, postTemplates: e.target.value })} />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-muted-foreground">Free Slot Capacity</label>
+                            <Input type="number" value={editForm.freeSlotCapacity || ""} onChange={e => setEditForm({ ...editForm, freeSlotCapacity: Number(e.target.value) })} />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-muted-foreground">Paid Slot Price ($)</label>
+                            <Input type="number" step="0.01" value={editForm.paidSlotPrice || ""} onChange={e => setEditForm({ ...editForm, paidSlotPrice: Number(e.target.value) })} />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => saveEdit.mutate({ id: agent.id, data: editForm })} disabled={saveEdit.isPending}>
+                            {saveEdit.isPending ? <RefreshCw className="w-3 h-3 animate-spin mr-1" /> : <Check className="w-3 h-3 mr-1" />} Save
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Wallets Tab ───────────────────────────────────────────────────────────────
+
+function WalletsTab({ token }: { token: string | null }) {
+  const { toast } = useToast();
+  const [selected, setSelected] = useState<string[]>([]);
+  const headers = token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+
+  const { data, isLoading, refetch } = useQuery<{
+    wallets: any[];
+    totalWithAddress: number;
+    totalPending: number;
+    totalActive: number;
+  }>({
+    queryKey: ["admin-wallets"],
+    queryFn: () => fetch("/api/admin/wallets", { headers }).then(r => r.json()),
+    staleTime: 30_000,
+  });
+
+  const sweep = useMutation({
+    mutationFn: (userIds: string[]) =>
+      fetch("/api/admin/wallets/sweep", { method: "POST", headers, body: JSON.stringify({ userIds }) }).then(r => r.json()),
+    onSuccess: (res: any) => {
+      toast({ title: "Sweep initiated", description: res.message });
+      setSelected([]);
+    },
+  });
+
+  const wallets: any[] = data?.wallets ?? [];
+  const allSelected = wallets.length > 0 && selected.length === wallets.length;
+
+  function toggleAll() {
+    setSelected(allSelected ? [] : wallets.map(w => w.id));
+  }
+  function toggle(id: string) {
+    setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: "With Address", value: data?.totalWithAddress ?? "—", icon: Wallet, color: "text-primary" },
+          { label: "Pending",      value: data?.totalPending ?? "—",    icon: Clock,  color: "text-amber-400" },
+          { label: "Active",       value: data?.totalActive ?? "—",     icon: CheckCircle, color: "text-green-400" },
+        ].map(s => (
+          <Card key={s.label} className="glass-panel border-border/50">
+            <CardContent className="p-4 flex items-center gap-3">
+              <s.icon className={`w-5 h-5 ${s.color}`} />
+              <div>
+                <p className="text-xl font-bold">{s.value}</p>
+                <p className="text-xs text-muted-foreground">{s.label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Actions bar */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          {selected.length > 0 ? `${selected.length} selected` : `${wallets.length} users total`}
+        </p>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => refetch()}><RefreshCw className="w-3.5 h-3.5 mr-1" />Refresh</Button>
+          <Button size="sm" disabled={selected.length === 0 || sweep.isPending}
+            onClick={() => sweep.mutate(selected)}>
+            <Wallet className="w-3.5 h-3.5 mr-1" /> Sweep {selected.length > 0 ? `(${selected.length})` : "Selected"}
+          </Button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+      ) : wallets.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground"><Wallet className="w-10 h-10 mx-auto mb-3 opacity-30" /><p>No users yet.</p></div>
+      ) : (
+        <Card className="border-border/50">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10">
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} className="rounded" />
+                </TableHead>
+                <TableHead>User</TableHead>
+                <TableHead>Slug</TableHead>
+                <TableHead>Wallet Address</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Referred By Wallet</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {wallets.map((w: any) => (
+                <TableRow key={w.id} className={selected.includes(w.id) ? "bg-primary/5" : ""}>
+                  <TableCell>
+                    <input type="checkbox" checked={selected.includes(w.id)} onChange={() => toggle(w.id)} className="rounded" />
+                  </TableCell>
+                  <TableCell className="text-xs">{w.email}</TableCell>
+                  <TableCell><span className="font-mono text-xs text-primary">/{w.slug}</span></TableCell>
+                  <TableCell>
+                    {w.walletAddress
+                      ? <span className="font-mono text-xs">{w.walletAddress.slice(0,10)}…{w.walletAddress.slice(-6)}</span>
+                      : <span className="text-muted-foreground text-xs">—</span>}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={`text-xs ${
+                      w.walletStatus === "active" ? "text-green-400 border-green-500/30" :
+                      w.walletStatus === "pending" ? "text-amber-400 border-amber-500/30" : "text-muted-foreground"
+                    }`}>{w.walletStatus}</Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">{w.roleLabel || "—"}</TableCell>
+                  <TableCell>
+                    {w.walletAddress
+                      ? <span className="font-mono text-[10px] text-muted-foreground">{w.walletAddress.slice(0,8)}…</span>
+                      : <span className="text-muted-foreground text-xs">no wallet</span>}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
     </div>
   );
 }

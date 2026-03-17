@@ -26,31 +26,73 @@ const BATCH_SIZE = 20;
 
 // ─── Agent context ────────────────────────────────────────────────────────────
 
-async function getAgentContext(): Promise<{
+const DEFAULT_KEYWORDS = [
+  "bitcoin", "btc", "crypto", "cryptocurrency", "passive income",
+  "invest", "investing", "digital asset", "blockchain", "wallet",
+  "satoshi", "hodl", "bull run", "bear market", "financial freedom",
+];
+
+/**
+ * Build context for a given agent (defaults to "ralph").
+ * Merges the agent's icpContext keywords + post templates into the context
+ * so each agent sends different, ICP-tailored prompts to Moltis.
+ */
+async function getAgentContext(agentSlug = "ralph"): Promise<{
+  agentId: string;
   persona: string;
   keywords: string[];
+  postTemplates: string[];
   approvalMode: string;
+  composioEntityId: string | null;
 } | null> {
   const agent = await db
     .select().from(agentsTable)
-    .where(and(eq(agentsTable.slug, "ralph"), eq(agentsTable.isActive, true)))
+    .where(and(eq(agentsTable.slug, agentSlug), eq(agentsTable.isActive, true)))
     .limit(1).then(r => r[0]);
 
   if (!agent) return null;
 
+  // Merge platform-wide user keywords
   const allKeywords = await db.select().from(agentKeywordsTable);
-  const merged = Array.from(new Set(allKeywords.flatMap(k => k.keywords || [])));
+  const userKws = Array.from(new Set(allKeywords.flatMap(k => k.keywords || [])));
 
-  const DEFAULT_KEYWORDS = [
-    "bitcoin", "btc", "crypto", "cryptocurrency", "passive income",
-    "invest", "investing", "digital asset", "blockchain", "wallet",
-    "satoshi", "hodl", "bull run", "bear market", "financial freedom",
+  // Parse agent's own ICP context (if set)
+  let icpKws: string[] = [];
+  let icpPainPoints: string[] = [];
+  if (agent.icpContext) {
+    try {
+      const icp = JSON.parse(agent.icpContext);
+      icpKws = Array.isArray(icp.keywords) ? icp.keywords : [];
+      icpPainPoints = Array.isArray(icp.painPoints) ? icp.painPoints : [];
+    } catch { /* ignore */ }
+  }
+
+  // Parse post templates
+  let postTemplates: string[] = [];
+  if (agent.postTemplates) {
+    try {
+      const parsed = JSON.parse(agent.postTemplates);
+      postTemplates = Array.isArray(parsed) ? parsed : [];
+    } catch { /* ignore */ }
+  }
+
+  const keywords = [
+    ...new Set([...icpKws, ...userKws, ...DEFAULT_KEYWORDS])
   ];
 
+  // Build persona string incorporating ICP pain points for Moltis
+  let persona = agent.persona || "Ralph Loop — BTC Experiment Agent";
+  if (icpPainPoints.length > 0) {
+    persona += `\n\nICP Pain Points (use these to personalise replies):\n${icpPainPoints.map(p => `- ${p}`).join("\n")}`;
+  }
+
   return {
-    persona:      agent.persona || "Ralph Loop",
-    keywords:     merged.length > 0 ? merged : DEFAULT_KEYWORDS,
-    approvalMode: agent.leadApprovalMode,
+    agentId:          agent.id,
+    persona,
+    keywords,
+    postTemplates,
+    approvalMode:     agent.leadApprovalMode,
+    composioEntityId: agent.composioEntityId ?? null,
   };
 }
 

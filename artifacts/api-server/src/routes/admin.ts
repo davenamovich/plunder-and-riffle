@@ -124,7 +124,7 @@ router.get("/admin/users", requireAdmin, async (req, res) => {
     const total = await db.select({ count: count() }).from(usersTable).then(r => Number(r[0]?.count ?? 0));
 
     const enriched = await Promise.all(users.map(async (user) => {
-      const [offerSignupCount, activeSlots, referralCount, walletLinks] = await Promise.all([
+      const [offerSignupCount, activeSlots, referralCount, walletLinks, referrer] = await Promise.all([
         db.select({ count: count() }).from(offerSignupsTable).where(eq(offerSignupsTable.userId, user.id)).then(r => Number(r[0]?.count ?? 0)),
         db.select({ count: count() }).from(rotatorSlotsTable).where(and(eq(rotatorSlotsTable.userId, user.id), eq(rotatorSlotsTable.status, "active"), gt(rotatorSlotsTable.expiresAt, now))).then(r => Number(r[0]?.count ?? 0)),
         db.select({ count: count() }).from(usersTable).where(eq(usersTable.referredById, user.id)).then(r => Number(r[0]?.count ?? 0)),
@@ -132,14 +132,26 @@ router.get("/admin/users", requireAdmin, async (req, res) => {
           .from(personalRotatorLinksTable)
           .where(and(eq(personalRotatorLinksTable.userId, user.id), eq(personalRotatorLinksTable.isActive, true)))
           .limit(5),
+        // Resolve the referrer's slug + wallet so we can track slug→wallet chain
+        user.referredById
+          ? db.select({ slug: usersTable.slug, walletAddress: usersTable.walletAddress, email: usersTable.email })
+              .from(usersTable).where(eq(usersTable.id, user.referredById)).limit(1).then(r => r[0] ?? null)
+          : Promise.resolve(null),
       ]);
       return {
         id: user.id, email: user.email, slug: user.slug, displayName: user.displayName,
-        role: user.role, createdAt: user.createdAt,
-        walletAddress: user.walletAddress ?? null,
+        role: user.role, createdAt: user.createdAt, roleLabel: user.roleLabel,
+        walletAddress: user.walletAddress ?? null, walletStatus: user.walletStatus,
+        referralCode: user.referralCode,
         offerSignupCount, activeSlots, referralCount,
         walletLinks,
         primaryWalletUrl: walletLinks[0]?.url ?? null,
+        // Referral attribution chain: slug → referrer wallet
+        referredBy: referrer ? {
+          slug:          referrer.slug,
+          email:         referrer.email,
+          walletAddress: referrer.walletAddress ?? null,
+        } : null,
       };
     }));
 
@@ -355,6 +367,161 @@ router.put("/admin/dm-sequences/:id", requireAdmin, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
+});
+
+// ─── Agent Fleet Management ────────────────────────────────────────────────────
+
+router.get("/admin/agents-fleet", requireAdmin, async (req, res) => {
+  try {
+    const agents = await db.select().from(agentsTable);
+    const now = new Date();
+    const enriched = await Promise.all(agents.map(async (agent) => {
+      const [freeSlots, paidSlots] = await Promise.all([
+        db.select({ count: count() }).from(rotatorSlotsTable).where(
+          and(eq(rotatorSlotsTable.agentId, agent.id), eq(rotatorSlotsTable.slotType, "free"),
+              eq(rotatorSlotsTable.status, "active"), gt(rotatorSlotsTable.expiresAt, now))
+        ).then(r => Number(r[0]?.count ?? 0)),
+        db.select({ count: count() }).from(rotatorSlotsTable).where(
+          and(eq(rotatorSlotsTable.agentId, agent.id), eq(rotatorSlotsTable.slotType, "paid"),
+              eq(rotatorSlotsTable.status, "active"), gt(rotatorSlotsTable.expiresAt, now))
+        ).then(r => Number(r[0]?.count ?? 0)),
+      ]);
+      return {
+        id: agent.id, slug: agent.slug, name: agent.name, description: agent.description,
+        isActive: agent.isActive, isPaused: agent.isPaused,
+        freeSlotCapacity: agent.freeSlotCapacity, paidSlotCapacity: agent.paidSlotCapacity,
+        activeFreeSlots: freeSlots, activePaidSlots: paidSlots,
+        dailyCap: agent.dailyCap, dailyLeadCount: agent.dailyLeadCount,
+        totalClicks: agent.totalClicks, totalSignups: agent.totalSignups,
+        paidSlotPrice: agent.paidSlotPrice, slotDurationHours: agent.slotDurationHours,
+        leadApprovalMode: agent.leadApprovalMode, offerUrl: agent.offerUrl,
+        fallbackUrl: agent.fallbackUrl, createdAt: agent.createdAt,
+      };
+    }));
+    res.json({ agents: enriched });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.post("/admin/agents", requireAdmin, async (req, res) => {
+  try {
+    const { slug, name, description, offerUrl, freeSlotCapacity, paidSlotCapacity, slotDurationHours, dailyCap, paidSlotPrice } = req.body;
+    if (!slug || !name || !offerUrl) { res.status(400).json({ error: "slug, name, offerUrl required" }); return; }
+    const [agent] = await db.insert(agentsTable).values({
+      slug: slug.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
+      name, description: description || null, offerUrl,
+      freeSlotCapacity: freeSlotCapacity || 25, paidSlotCapacity: paidSlotCapacity || 25,
+      slotDurationHours: slotDurationHours || 24, dailyCap: dailyCap || 100, paidSlotPrice: paidSlotPrice || 9.99,
+    }).returning();
+    res.json({ success: true, agent });
+  } catch (err: any) {
+    if (err.code === "23505") { res.status(400).json({ error: "Agent slug already exists" }); return; }
+    console.error(err); res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/admin/agents/:id", requireAdmin, async (req, res) => {
+  try {
+    const agent = await db.select().from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+    const allowed = ["name","description","offerUrl","fallbackUrl","freeSlotCapacity","paidSlotCapacity",
+                     "slotDurationHours","dailyCap","paidSlotPrice","leadApprovalMode","isPaused","isActive"];
+    const updates: any = {};
+    for (const key of allowed) { if (req.body[key] !== undefined) updates[key] = req.body[key]; }
+    const [updated] = await db.update(agentsTable).set({ ...updates, updatedAt: new Date() })
+      .where(eq(agentsTable.id, req.params.id)).returning();
+    res.json({ success: true, agent: updated });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.post("/admin/agents/:id/toggle-pause", requireAdmin, async (req, res) => {
+  try {
+    const agent = await db.select().from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+    const [updated] = await db.update(agentsTable).set({ isPaused: !agent.isPaused, updatedAt: new Date() })
+      .where(eq(agentsTable.id, req.params.id)).returning();
+    res.json({ success: true, isPaused: updated.isPaused });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.delete("/admin/agents/:id", requireAdmin, async (req, res) => {
+  try {
+    const agent = await db.select().from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+    if (agent.slug === "ralph") { res.status(400).json({ error: "Cannot delete the main agent" }); return; }
+    await db.delete(agentsTable).where(eq(agentsTable.id, req.params.id));
+    res.json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Agent Mint ────────────────────────────────────────────────────────────────
+
+router.post("/admin/agents/:id/mint", requireAdmin, async (req, res) => {
+  try {
+    const agent = await db.select().from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+
+    // Toggle: if already minted, un-mint; otherwise enable minting
+    const now = new Date();
+    const wasMinted = agent.nftMintEnabled && agent.nftMintedAt;
+    const [updated] = await db.update(agentsTable).set({
+      nftMintEnabled: !wasMinted,
+      nftMintedAt:    wasMinted ? null : now,
+      nftTokenId:     wasMinted ? null : (agent.nftTokenId || `mint-${agent.id.slice(0, 8)}-${Date.now()}`),
+      updatedAt:      now,
+    }).where(eq(agentsTable.id, req.params.id)).returning();
+
+    console.log(`[mint] agent ${agent.slug} nftMintEnabled=${updated.nftMintEnabled} token=${updated.nftTokenId}`);
+    // TODO: call on-chain NFT contract via Privy server wallet API to mint real token
+
+    res.json({
+      success: true,
+      nftMintEnabled: updated.nftMintEnabled,
+      nftMintedAt:    updated.nftMintedAt,
+      nftTokenId:     updated.nftTokenId,
+      message: updated.nftMintEnabled
+        ? `Agent ${agent.name} NFT minting enabled. Token: ${updated.nftTokenId}`
+        : `Agent ${agent.name} NFT mint revoked.`,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Wallet Management ─────────────────────────────────────────────────────────
+
+router.get("/admin/wallets", requireAdmin, async (req, res) => {
+  try {
+    const users = await db.select({
+      id: usersTable.id, email: usersTable.email, slug: usersTable.slug,
+      displayName: usersTable.displayName, walletAddress: usersTable.walletAddress,
+      walletStatus: usersTable.walletStatus, roleLabel: usersTable.roleLabel, createdAt: usersTable.createdAt,
+    }).from(usersTable);
+
+    res.json({
+      wallets: users.map(u => ({
+        ...u,
+        walletStatus: u.walletStatus ?? "none",
+        walletAddress: u.walletAddress ?? null,
+      })),
+      totalWithAddress: users.filter(u => u.walletAddress).length,
+      totalPending: users.filter(u => u.walletStatus === "pending").length,
+      totalActive: users.filter(u => u.walletStatus === "active").length,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.post("/admin/wallets/sweep", requireAdmin, async (req, res) => {
+  try {
+    const { userIds } = req.body;
+    const ids: string[] = Array.isArray(userIds) ? userIds : [];
+    console.log("[wallet-sweep] triggered for", ids.length, "wallets by admin", (req as any).user?.email);
+    // TODO: integrate Privy server-side wallet API or on-chain provider to sweep balances
+    res.json({
+      success: true,
+      swept: ids.length,
+      message: ids.length
+        ? `Sweep initiated for ${ids.length} wallet(s). Wire Privy server wallet API to execute.`
+        : "No wallet IDs provided.",
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
 export default router;

@@ -1,6 +1,7 @@
 import { pgTable, text, timestamp, boolean, integer, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { usersTable } from "./users";
 
 export const agentsTable = pgTable("agents", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -23,8 +24,20 @@ export const agentsTable = pgTable("agents", {
   paidSlotPrice: real("paid_slot_price").notNull().default(9.99),
   leadApprovalMode: text("lead_approval_mode").notNull().default("manual"),
   nftMintEnabled: boolean("nft_mint_enabled").notNull().default(false),
+  nftMintedAt: timestamp("nft_minted_at"),
+  nftTokenId: text("nft_token_id"),
   totalClicks: integer("total_clicks").notNull().default(0),
   totalSignups: integer("total_signups").notNull().default(0),
+  // Profile fields
+  ownerId: text("owner_id").references(() => usersTable.id, { onDelete: "set null" }),
+  avatarUrl: text("avatar_url"),
+  twitterHandle: text("twitter_handle"),
+  linkedinUrl: text("linkedin_url"),
+  composioEntityId: text("composio_entity_id"),
+  // Per-agent ICP context used by Moltis (JSON string)
+  icpContext: text("icp_context"),
+  // Post templates for this agent (JSON array of strings)
+  postTemplates: text("post_templates"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
