@@ -15,6 +15,10 @@ export const usersTable = pgTable("users", {
   referredById: text("referred_by_id"),
   isAbuseFlagged: boolean("is_abuse_flagged").notNull().default(false),
   walletAddress: text("wallet_address"),
+  roleLabel: text("role_label"),
+  walletStatus: text("wallet_status").notNull().default("none"),
+  onboardingSource: text("onboarding_source"),
+  onboardingCompletedAt: timestamp("onboarding_completed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -78,7 +78,9 @@ Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client insta
 - `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
 - Exports: `.` (pool, db, schema), `./schema` (schema only)
 
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
+Production migrations are tracked via Drizzle's migration system. The API server auto-applies pending migrations at startup using `runMigrations()` from `lib/db/src/migrate.ts`. After any schema change, run `pnpm --filter @workspace/db run push` (dev) and `pnpm --filter @workspace/db run generate` (creates SQL migration file). Mark the new migration as applied if the DB was already updated via push: insert into `drizzle.__drizzle_migrations`.
+
+**ICP Onboarding Flow** — users land on `/`, select their role (chip or text input), are redirected to `/icp?role=...`. ICP page shows personalized copy (pain points, why this helps) and collects email. On submit, `POST /api/onboarding/start` creates/finds the user, sets `roleLabel`/`walletStatus=pending`/`onboardingSource=icp`, activates a 24h free rotator slot, and returns a JWT token. Frontend stores token (same localStorage key as Privy flow) and redirects to `/agent/ralph?new=1`. Role copy utility: `artifacts/btc-experiment/src/lib/icp.ts`.
 
 ### `lib/api-spec` (`@workspace/api-spec`)
 

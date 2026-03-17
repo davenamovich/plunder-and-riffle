@@ -11,6 +11,7 @@ import AgentPage from "@/pages/agent";
 import PersonalRotator from "@/pages/personal-rotator";
 import Dashboard from "@/pages/dashboard";
 import Admin from "@/pages/admin";
+import IcpPage from "@/pages/icp";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -19,6 +20,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Landing} />
+      <Route path="/icp" component={IcpPage} />
       <Route path="/agent/:slug" component={AgentPage} />
       <Route path="/r/:userSlug" component={PersonalRotator} />
       <Route path="/dashboard" component={Dashboard} />

@@ -1,0 +1,361 @@
+You are a senior full-stack engineer.
+
+Wire the ICP page into the existing Replit MVP for The BTC Experiment.
+
+We already have:
+- Next.js App Router
+- Prisma
+- Postgres
+- Redis
+- one main agent
+- one main agent rotator
+- personal rotator
+- signup service
+- offer redemption
+- free slot activation
+- redirect route
+- dashboard
+- admin
+- Moltis adapter
+
+Now implement the ICP onboarding flow end-to-end.
+
+==================================================
+GOAL
+==================================================
+
+We need a 2-step funnel:
+
+STEP 1:
+Landing page asks who the user is.
+
+STEP 2:
+ICP page explains:
+- what is happening in the world
+- everyone will have an agent
+- the real question is: is it working for you?
+- their specific pain points
+- how this helps them for free
+- they enter email
+- we create their account
+- we create their wallet placeholder
+- we activate their 24-hour free trial
+- we put them into the main agent rotator
+- we generate their personal rotator
+- then redirect them into the system
+
+This is for The BTC Experiment.
+
+Core message:
+- let the agent prove it first
+- start free for 24 hours
+- everyone will have an agent
+- most people will not have one working for them
+- this is the bridge to Web4
+
+==================================================
+IMPORTANT PRODUCT RULES
+==================================================
+
+1. The landing page should NOT collect email.
+2. The landing page only captures who they are.
+3. Then redirect to /icp?role=...
+4. The ICP page explains the personalized value.
+5. The ICP page collects email.
+6. Email is used to:
+   - create account
+   - create wallet placeholder
+   - activate free trial
+   - put user into main rotator
+7. The user gets 24 hours free in the main agent rotator.
+8. Personal rotator is also created or updated.
+9. Use the existing main offer / main agent model.
+10. Use existing signup + redemption flow if possible.
+11. Keep this Replit-friendly and simple.
+
+==================================================
+WHAT TO BUILD
+==================================================
+
+Generate all required code changes and new files.
+
+Produce full code blocks with file paths.
+
+==================================================
+PART 1 — ROUTE PLAN
+==================================================
+
+Add these routes:
+
+- /
+- /icp
+- /agent/[slug]
+- /dashboard
+- /r/[slug]
+- /api/onboarding/start
+- /api/offers/signup
+- /api/rotator/redirect
+
+Explain how they connect.
+
+==================================================
+PART 2 — DATABASE UPDATE
+==================================================
+
+Update Prisma schema to support ICP onboarding.
+
+Need fields/tables for:
+
+User:
+- roleLabel (string, nullable)
+- walletStatus (enum or string)
+- walletAddress (nullable)
+- onboardingSource (nullable)
+- onboardingCompletedAt (nullable)
+
+Optional:
+- icpProfileId if useful
+
+If needed add:
+- OnboardingEvent
+- WalletProvisioningState
+
+Keep it lean.
+Do NOT overbuild.
+
+Generate the exact Prisma schema additions.
+
+==================================================
+PART 3 — LANDING PAGE
+==================================================
+
+Generate app/page.tsx as the landing page.
+
+Requirements:
+- big rotating roles
+- chips for common ICPs
+- type-your-role input
+- button: Start My 24 Hours
+- no email field here
+- on submit redirect to /icp?role=...
+
+Use a clean dark BTC Experiment style.
+Keep it simple and sharp.
+
+Suggested common roles:
+- Business Owner
+- Salon Owner
+- Realtor
+- Creator
+- Freelancer
+- Student
+- Gym Owner
+- Insurance Agent
+- Restaurant Owner
+- Non-profit
+- Dasher
+
+==================================================
+PART 4 — ICP PAGE
+==================================================
+
+Generate app/icp/page.tsx.
+
+Requirements:
+- read role from search params
+- headline:
+  "You're a [role]."
+- sub-message:
+  "Everyone will have an agent. The question is: is it working for you?"
+- personalized pain block based on role
+- explanation of what happens during the free 24 hours
+- email field
+- CTA:
+  "Activate My 24 Hours"
+- on submit call /api/onboarding/start
+- show a short loading state:
+  - creating wallet
+  - setting up your agent
+  - adding you to the rotator
+- on success redirect to /agent/main-agent?new=1&role=...
+
+Make this page persuasive and personalized.
+
+==================================================
+PART 5 — ROLE / ICP LOGIC
+==================================================
+
+Add a simple role mapping utility.
+
+Create:
+- lib/icp.ts
+
+Need:
+- normalizeRole(input)
+- getRoleCopy(role)
+
+Return:
+- display label
+- pain points
+- why this helps
+- suggested explanation
+
+Support known roles with custom copy and a default fallback.
+
+The copy should emphasize:
+- their pain
+- how agents change the game
+- that they are early
+- free proof first
+
+==================================================
+PART 6 — API: ONBOARDING START
+==================================================
+
+Create:
+
+app/api/onboarding/start/route.ts
+
+This endpoint should:
+1. accept email + role
+2. normalize role
+3. find or create user
+4. set roleLabel
+5. create wallet placeholder if missing
+6. call existing signup flow for main offer
+7. ensure personal rotator exists
+8. return:
+   - ok
+   - userId
+   - userSlug
+   - personalRotatorUrl
+   - agentUrl
+   - walletStatus
+
+Do NOT implement real Privy auth yet.
+Just scaffold the wallet placeholder properly.
+
+Wallet placeholder logic:
+- walletStatus = "pending"
+- walletAddress = null initially
+
+==================================================
+PART 7 — SERVICE LAYER
+==================================================
+
+Create or update these services:
+
+- services/onboarding/onboarding.service.ts
+- services/wallet/wallet-placeholder.service.ts
+- services/offers/signup.service.ts (reuse if possible)
+- services/offers/redeem.service.ts
+- services/rotator/agent-rotator.service.ts
+- services/rotator/personal-rotator.service.ts
+
+The onboarding service should:
+- own the ICP email submission flow
+- call wallet placeholder setup
+- call offer signup
+- call free slot activation
+- ensure personal rotator link exists
+
+==================================================
+PART 8 — WALLET PLACEHOLDER
+==================================================
+
+Create a wallet placeholder service.
+
+File:
+- services/wallet/wallet-placeholder.service.ts
+
+Requirements:
+- if user has no wallet state, set walletStatus = "pending"
+- store onboarding source as "icp"
+- future-ready for Privy integration
+- no fake wallet address unless clearly marked placeholder
+- keep it simple
+
+==================================================
+PART 9 — USER EXPERIENCE
+==================================================
+
+After successful onboarding:
+- redirect user to /agent/main-agent?new=1&role=...
+OR /dashboard if you think that is stronger
+
+Make a recommendation and implement it.
+
+My preference:
+- redirect to the main agent page first so they feel the system immediately
+
+==================================================
+PART 10 — COPY REQUIREMENTS
+==================================================
+
+The ICP page must clearly say:
+
+- Everyone will have an agent
+- Your competitors will have agents
+- The question is whether one is working for you
+- Free 24 hours lets the system prove itself
+- You do not need to understand crypto
+- We’ll create your wallet path and get you into the system
+- This is the bridge to Web4
+
+Personalized pain examples:
+- Salon Owner: empty chairs, inconsistent bookings
+- Realtor: expensive leads, chasing leads manually
+- Creator: inconsistent monetization
+- Restaurant Owner: slow nights, wasted foot traffic
+- Insurance Agent: high lead cost
+- Student: no leverage, no extra income stream
+- Freelancer: income stops when you stop
+- Gym Owner: membership growth is inconsistent
+
+==================================================
+PART 11 — FILES TO GENERATE
+==================================================
+
+Generate full code for:
+
+1. prisma/schema.prisma updates
+2. lib/icp.ts
+3. services/wallet/wallet-placeholder.service.ts
+4. services/onboarding/onboarding.service.ts
+5. app/page.tsx
+6. app/icp/page.tsx
+7. app/api/onboarding/start/route.ts
+
+If existing services must change, generate those changed files too.
+
+==================================================
+PART 12 — ENGINEERING RULES
+==================================================
+
+- Use TypeScript
+- Use App Router
+- Use Prisma
+- Keep it Replit-friendly
+- No overengineering
+- Reuse existing signup / redemption logic where possible
+- Keep server-side truth in services
+- UI should be minimal, dark, sharp, and credible
+
+==================================================
+PART 13 — OUTPUT FORMAT
+==================================================
+
+Output:
+- short architecture note
+- then full files with file paths
+- then exact commands to run:
+  - prisma generate
+  - prisma db push
+  - npm run dev
+
+At the end, ask if we should generate:
+1. real Privy integration
+2. dynamic AI-generated ICP copy
+3. progress animation / onboarding state machine
+4. paid slot purchase flow
+5. personalized agent page variants

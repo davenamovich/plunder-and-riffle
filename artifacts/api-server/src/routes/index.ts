@@ -10,11 +10,13 @@ import keywordsRouter from "./keywords.js";
 import adminRouter from "./admin.js";
 import cronRouter from "./cron.js";
 import trackingRouter from "./tracking.js";
+import onboardingRouter from "./onboarding.js";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(onboardingRouter);
 router.use(agentsRouter);
 router.use(rotatorRouter);
 router.use(offersRouter);
