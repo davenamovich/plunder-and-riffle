@@ -43,10 +43,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (exchangedRef.current === email) return;
     exchangedRef.current = email;
     setIsExchanging(true);
+    const walletAddress = privyUser.wallet?.address ?? null;
     fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, walletAddress }),
     })
       .then((r) => r.json())
       .then((data) => {

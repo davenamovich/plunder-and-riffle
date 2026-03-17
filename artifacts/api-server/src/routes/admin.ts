@@ -136,6 +136,7 @@ router.get("/admin/users", requireAdmin, async (req, res) => {
       return {
         id: user.id, email: user.email, slug: user.slug, displayName: user.displayName,
         role: user.role, createdAt: user.createdAt,
+        walletAddress: user.walletAddress ?? null,
         offerSignupCount, activeSlots, referralCount,
         walletLinks,
         primaryWalletUrl: walletLinks[0]?.url ?? null,

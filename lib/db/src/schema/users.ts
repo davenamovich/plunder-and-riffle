@@ -14,6 +14,7 @@ export const usersTable = pgTable("users", {
   referralCode: text("referral_code").notNull().unique(),
   referredById: text("referred_by_id"),
   isAbuseFlagged: boolean("is_abuse_flagged").notNull().default(false),
+  walletAddress: text("wallet_address"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

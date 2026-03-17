@@ -23,12 +23,13 @@ router.get("/auth/me", requireAuth, async (req, res) => {
 
 router.post("/auth/login", async (req, res) => {
   try {
-    const { email, referralCode } = req.body;
+    const { email, referralCode, walletAddress } = req.body;
     if (!email || typeof email !== "string" || !email.includes("@")) {
       res.status(400).json({ error: "Valid email required" });
       return;
     }
     const normalizedEmail = email.toLowerCase().trim();
+    const normalizedWallet = typeof walletAddress === "string" && walletAddress ? walletAddress : null;
 
     let user = await db.select().from(usersTable).where(eq(usersTable.email, normalizedEmail)).limit(1).then(r => r[0]);
 
@@ -51,8 +52,16 @@ router.post("/auth/login", async (req, res) => {
         displayName: normalizedEmail.split("@")[0],
         referralCode: generateReferralCode(),
         referredById,
+        walletAddress: normalizedWallet,
       }).returning();
       user = newUser;
+    } else if (normalizedWallet && user.walletAddress !== normalizedWallet) {
+      // Update wallet address if it changed or wasn't set yet
+      const [updated] = await db.update(usersTable)
+        .set({ walletAddress: normalizedWallet, updatedAt: new Date() })
+        .where(eq(usersTable.id, user.id))
+        .returning();
+      if (updated) user = updated;
     }
 
     const token = signToken(user.id);

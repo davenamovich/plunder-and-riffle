@@ -864,7 +864,8 @@ export default function Admin() {
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Joined</TableHead>
-                    <TableHead>Wallet / Links</TableHead>
+                    <TableHead>Privy Wallet</TableHead>
+                    <TableHead>Links</TableHead>
                     <TableHead>Offers</TableHead>
                     <TableHead>Active Slots</TableHead>
                     <TableHead>Referral Code</TableHead>
@@ -872,11 +873,11 @@ export default function Admin() {
                 </TableHeader>
                 <TableBody>
                   {usersRes?.users?.length === 0 && (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No users yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">No users yet.</TableCell></TableRow>
                   )}
                   {usersRes?.users?.map(u => {
                     const walletLinks = (u as any).walletLinks as Array<{ url: string; displayName: string; linkType: string }> ?? [];
-                    const primaryUrl = (u as any).primaryWalletUrl as string | null;
+                    const walletAddress = (u as any).walletAddress as string | null;
                     return (
                       <TableRow key={u.id}>
                         <TableCell className="font-medium">{u.email}</TableCell>
@@ -886,9 +887,29 @@ export default function Admin() {
                         <TableCell className="text-sm text-muted-foreground">
                           {new Date(u.createdAt).toLocaleDateString()}
                         </TableCell>
+                        {/* Privy Wallet */}
+                        <TableCell>
+                          {walletAddress ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
+                                {walletAddress.slice(0, 6)}…{walletAddress.slice(-4)}
+                              </span>
+                              <button
+                                onClick={() => navigator.clipboard.writeText(walletAddress).then(() => toast({ title: "Wallet address copied" }))}
+                                className="text-muted-foreground hover:text-foreground transition-colors"
+                                title={walletAddress}
+                              >
+                                <Copy className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/40 italic">not set</span>
+                          )}
+                        </TableCell>
+                        {/* Rotator / Link Tree */}
                         <TableCell className="max-w-xs">
                           {walletLinks.length === 0 ? (
-                            <span className="text-xs text-muted-foreground/50 italic">none set</span>
+                            <span className="text-xs text-muted-foreground/40 italic">none</span>
                           ) : (
                             <div className="space-y-1">
                               {walletLinks.map((lnk, i) => (
@@ -897,14 +918,11 @@ export default function Admin() {
                                     href={lnk.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-xs text-primary hover:underline truncate max-w-[180px]"
+                                    className="text-xs text-primary hover:underline truncate max-w-[160px]"
                                     title={lnk.url}
                                   >
                                     {lnk.displayName || lnk.url}
                                   </a>
-                                  {lnk.linkType && lnk.linkType !== "offer" && (
-                                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 shrink-0">{lnk.linkType}</Badge>
-                                  )}
                                 </div>
                               ))}
                             </div>
