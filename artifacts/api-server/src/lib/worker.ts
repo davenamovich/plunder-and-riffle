@@ -1,18 +1,23 @@
 /**
  * Background worker — runs scheduled tasks inside the API server process.
  *
- * Schedule:
- *   30s   — expire stale rotator slots
- *   2 min — Ralph classify loop (raw → scored)
- *   5 min — Ralph draft loop  (scored → pending_approval / approved)
- *   60 min — roll up agent metrics (future)
- *   24h   — reset daily lead caps
+ * Schedule (budget-aware, batch-optimised for 2000 calls/day):
+ *   30s    — expire stale rotator slots (no API calls)
+ *   15 min — Ralph classify batch (1 call per tick, up to 20 leads)
+ *   20 min — Ralph draft batch    (1 call per tick, up to 20 leads)
+ *   60 min — reset daily caps + log API usage
+ *
+ * Budget math (worst-case, all leads every tick):
+ *   classify: 24h / 15min = 96 calls/day
+ *   draft:    24h / 20min = 72 calls/day
+ *   Total automated: ~168 calls/day  →  leaves ~1,832 for on-demand use
  */
 
 import { db } from "@workspace/db";
 import { rotatorSlotsTable, agentsTable } from "@workspace/db/schema";
 import { eq, and, lt } from "drizzle-orm";
 import { classifyRawLeads, draftScoredLeads } from "./ralph.js";
+import { getDailyUsage } from "./moltis.js";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -21,7 +26,7 @@ const MINUTE = 60 * SECOND;
 
 async function expireStaleSlots() {
   try {
-    const now = new Date();
+    const now     = new Date();
     const expired = await db
       .update(rotatorSlotsTable)
       .set({ status: "expired", expiredAt: now })
@@ -38,7 +43,7 @@ async function expireStaleSlots() {
 
 async function resetDailyCaps() {
   try {
-    const now = new Date();
+    const now      = new Date();
     const midnight = new Date();
     midnight.setHours(0, 0, 0, 0);
 
@@ -51,6 +56,10 @@ async function resetDailyCaps() {
     if (reset.length > 0) {
       console.log(`[worker] reset daily caps for ${reset.length} agents`);
     }
+
+    // Log API usage summary
+    const usage = await getDailyUsage();
+    console.log(`[worker] daily API usage: ${usage.used}/${usage.cap} calls used, ${usage.remaining} remaining`);
   } catch (err) {
     console.error("[worker] resetDailyCaps error:", err);
   }
@@ -60,7 +69,7 @@ async function runClassifyTick() {
   try {
     const result = await classifyRawLeads();
     if (result.processed > 0) {
-      console.log(`[worker] classify: ${result.processed} processed, ${result.rejected} rejected`);
+      console.log(`[worker] classify: ${result.processed} processed, ${result.rejected} rejected${result.skipped > 0 ? `, ${result.skipped} skipped (budget)` : ""}`);
     }
   } catch (err) {
     console.error("[worker] classify tick error:", err);
@@ -71,7 +80,7 @@ async function runDraftTick() {
   try {
     const result = await draftScoredLeads();
     if (result.drafted > 0) {
-      console.log(`[worker] draft: ${result.drafted} drafted`);
+      console.log(`[worker] draft: ${result.drafted} drafted${result.skipped > 0 ? `, ${result.skipped} skipped (budget)` : ""}`);
     }
   } catch (err) {
     console.error("[worker] draft tick error:", err);
@@ -88,24 +97,24 @@ export function startWorker() {
 
   console.log("[worker] starting background worker");
 
-  // Expire stale slots — every 30s
+  // Expire stale slots — every 30s (free)
   setInterval(expireStaleSlots, 30 * SECOND);
 
-  // Classify raw leads — every 2 min
-  setInterval(runClassifyTick, 2 * MINUTE);
+  // Classify raw leads — every 15 min (1 API call, 20 leads)
+  setInterval(runClassifyTick, 15 * MINUTE);
 
-  // Draft scored leads — every 5 min
-  setInterval(runDraftTick, 5 * MINUTE);
+  // Draft scored leads — every 20 min (1 API call, 20 leads)
+  setInterval(runDraftTick, 20 * MINUTE);
 
-  // Reset daily caps — every hour (cheap check, only acts when needed)
+  // Reset daily caps + log usage — every hour
   setInterval(resetDailyCaps, 60 * MINUTE);
 
-  // Run immediately on start to catch anything queued
+  // Run immediately on start to catch any queue backlog
   setTimeout(() => {
     expireStaleSlots();
     resetDailyCaps();
     runClassifyTick().then(() => runDraftTick());
   }, 5 * SECOND);
 
-  console.log("[worker] scheduled: expire=30s, classify=2m, draft=5m, caps=60m");
+  console.log("[worker] scheduled: expire=30s, classify=15m (batch), draft=20m (batch), caps=60m");
 }

@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable } from "@workspace/db/schema";
 import { eq, and, gt, count } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
-import { moltisStatus } from "../lib/moltis.js";
+import { moltisStatusWithUsage, getDailyUsage } from "../lib/moltis.js";
 import { runRalphLoop } from "../lib/ralph.js";
 
 const router = Router();
@@ -182,16 +182,26 @@ router.get("/admin/leads", requireAdmin, async (req, res) => {
 // Ralph loop status
 router.get("/admin/ralph/status", requireAdmin, async (req, res) => {
   try {
-    const moltis = moltisStatus();
-    const leadCounts = await db
-      .select({ status: leadsTable.status, count: count() })
-      .from(leadsTable)
-      .groupBy(leadsTable.status);
+    const [moltis, leadCounts] = await Promise.all([
+      moltisStatusWithUsage(),
+      db.select({ status: leadsTable.status, count: count() }).from(leadsTable).groupBy(leadsTable.status),
+    ]);
 
     res.json({
       moltis,
       leads: Object.fromEntries(leadCounts.map((r) => [r.status, Number(r.count)])),
     });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Quick daily API usage check (no auth needed for lightweight monitoring)
+router.get("/admin/usage", requireAdmin, async (req, res) => {
+  try {
+    const usage = await getDailyUsage();
+    res.json(usage);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
