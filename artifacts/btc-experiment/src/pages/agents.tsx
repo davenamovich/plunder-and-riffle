@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import {
-  Bot, Zap, Users, BarChart2, Clock, ArrowRight, Lock, CheckCircle
+  Bot, Zap, Users, BarChart2, Clock, ArrowRight, Lock, CheckCircle, Split
 } from "lucide-react";
 
 interface AgentCard {
@@ -171,6 +171,28 @@ export default function AgentsPage() {
                         </li>
                       ))}
                     </ul>
+
+                    {/* Paid seat split info */}
+                    {agent.paidSlotPrice > 0 && (
+                      <div className="rounded-xl border border-border/40 bg-muted/10 p-3 mt-1">
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold mb-2 flex items-center gap-1.5">
+                          <Split className="h-3 w-3" /> Paid seat revenue split
+                        </p>
+                        <div className="grid grid-cols-4 gap-1 text-center">
+                          {[
+                            { label: "Referrer", color: "text-primary" },
+                            { label: "Manager", color: "text-amber-400" },
+                            { label: "Bot Ops", color: "text-blue-400" },
+                            { label: "Dev", color: "text-purple-400" },
+                          ].map(r => (
+                            <div key={r.label}>
+                              <p className={`text-base font-black ${r.color}`}>25%</p>
+                              <p className="text-[10px] text-muted-foreground leading-tight">{r.label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* CTA */}
                     <div className="mt-auto pt-2">

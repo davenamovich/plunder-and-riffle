@@ -242,6 +242,7 @@ export default function Landing() {
 
       <KeyInsightCallout />
       <IncomeStackSection />
+      <PaidSeatSplitSection />
       <HowItWorksSection />
     </div>
   );
@@ -438,6 +439,124 @@ function IncomeStackSection() {
             Start Stacking <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
           </Button>
         </motion.div>
+      </div>
+    </section>
+  );
+}
+
+const SPLIT_RECIPIENTS = [
+  {
+    label: "Referrer",
+    pct: 25,
+    icon: Users,
+    color: "text-primary",
+    ring: "border-primary/40 bg-primary/10",
+    glow: "bg-primary/20",
+    desc: "The person who referred the seat buyer earns 25% — automatically, every time.",
+  },
+  {
+    label: "Agent Manager",
+    pct: 25,
+    icon: Bot,
+    color: "text-amber-400",
+    ring: "border-amber-500/40 bg-amber-500/10",
+    glow: "bg-amber-500/20",
+    desc: "The operator who built and maintains the agent fleet takes an equal share.",
+  },
+  {
+    label: "Bot Ops",
+    pct: 25,
+    icon: Zap,
+    color: "text-blue-400",
+    ring: "border-blue-500/40 bg-blue-500/10",
+    glow: "bg-blue-500/20",
+    desc: "Infrastructure, uptime, and operations keeping the agent running around the clock.",
+  },
+  {
+    label: "Dev",
+    pct: 25,
+    icon: Layers,
+    color: "text-purple-400",
+    ring: "border-purple-500/40 bg-purple-500/10",
+    glow: "bg-purple-500/20",
+    desc: "The development team building and improving the platform continuously.",
+  },
+];
+
+function PaidSeatSplitSection() {
+  return (
+    <section className="py-16 px-4 bg-card/30">
+      <div className="max-w-5xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="text-center mb-12"
+        >
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary uppercase tracking-wider mb-5">
+            <Shield className="w-3.5 h-3.5" /> Revenue Transparency
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+            Paid seats split{" "}
+            <span className="text-primary">four ways. Equally.</span>
+          </h2>
+          <p className="text-muted-foreground max-w-2xl mx-auto text-base">
+            Every paid rotator seat is divided into four equal parts — open, verifiable, and the same for every transaction.
+            No hidden fees. No platform take beyond its share.
+          </p>
+        </motion.div>
+
+        {/* Split visualizer */}
+        <div className="grid md:grid-cols-4 gap-4 mb-8">
+          {SPLIT_RECIPIENTS.map((r, i) => (
+            <motion.div
+              key={r.label}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.4, delay: i * 0.08 }}
+              className="glass-panel rounded-2xl p-6 flex flex-col items-center text-center gap-3 relative group hover:-translate-y-1 transition-transform duration-300"
+            >
+              {/* Glow blob */}
+              <div className={`absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 ${r.glow} blur-xl pointer-events-none`} />
+
+              {/* Icon */}
+              <div className={`relative w-14 h-14 rounded-2xl border flex items-center justify-center ${r.ring}`}>
+                <r.icon className={`w-7 h-7 ${r.color}`} />
+              </div>
+
+              {/* Percentage */}
+              <p className={`text-4xl font-black font-display ${r.color}`}>25%</p>
+
+              {/* Label */}
+              <p className="font-bold text-sm text-foreground">{r.label}</p>
+
+              {/* Desc */}
+              <p className="text-xs text-muted-foreground leading-relaxed">{r.desc}</p>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Progress bar visual */}
+        <motion.div
+          initial={{ opacity: 0, scaleX: 0 }}
+          whileInView={{ opacity: 1, scaleX: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.7, delay: 0.3 }}
+          style={{ originX: 0 }}
+          className="rounded-full overflow-hidden h-3 flex gap-0.5 mb-4"
+        >
+          <div className="flex-1 bg-primary rounded-l-full" />
+          <div className="flex-1 bg-amber-500" />
+          <div className="flex-1 bg-blue-500" />
+          <div className="flex-1 bg-purple-500 rounded-r-full" />
+        </motion.div>
+        <div className="flex justify-between text-[11px] text-muted-foreground font-medium px-1">
+          {SPLIT_RECIPIENTS.map(r => (
+            <span key={r.label} className={r.color}>{r.label}</span>
+          ))}
+        </div>
       </div>
     </section>
   );
