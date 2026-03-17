@@ -206,15 +206,36 @@ export const LeadResponseStatus = {
   rejected: "rejected",
 } as const;
 
+export interface ScoreDetails {
+  niche_match:         number;
+  buyer_intent:        number;
+  urgency:             number;
+  likely_lead_value:   number;
+  response_likelihood: number;
+  spam_risk:           number;
+}
+
+export type ReplyStyle = "helpful" | "curiosity" | "ask_permission" | "soft_cta";
+export type RecommendedAction = "discard" | "review" | "draft";
+
 export interface LeadResponse {
   id: string;
   source: string;
   externalId?: string;
+  content?: string;
+  authorHandle?: string;
+  postUrl?: string;
   status: LeadResponseStatus;
   score?: number;
+  scoreReason?: string;
+  scoreDetails?: ScoreDetails;
+  replyStyle?: ReplyStyle;
   draft?: string;
+  rejectedReason?: string;
   postedAt?: string;
+  rejectedAt?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface LeadsListResponse {
@@ -227,10 +248,23 @@ export interface BuildIcpRequest {
 }
 
 export interface IcpResponse {
-  keywords: string[];
-  painPoints: string[];
+  // New structured fields
+  offerSummary:         string;
+  idealCustomerProfile: {
+    audience:   string;
+    problems:   string[];
+    desires:    string[];
+    objections: string[];
+  };
+  keywordClusters:    string[];
   buyerIntentPhrases: string[];
-  ctaAngles: string[];
+  searchPhrases:      string[];
+  outreachAngles:     string[];
+  ctaDirections:      string[];
+  // Backward-compat
+  keywords:       string[];
+  painPoints:     string[];
+  ctaAngles:      string[];
   targetAudience: string;
 }
 

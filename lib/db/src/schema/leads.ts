@@ -13,6 +13,8 @@ export const leadsTable = pgTable("leads", {
   status: text("status").notNull().default("raw"),
   score: real("score"),
   scoreReason: text("score_reason"),
+  scoreDetails: text("score_details"),   // JSON: full multi-dimensional scoring object
+  replyStyle: text("reply_style"),        // helpful | curiosity | ask_permission | soft_cta
   draft: text("draft"),
   postedAt: timestamp("posted_at"),
   rejectedAt: timestamp("rejected_at"),

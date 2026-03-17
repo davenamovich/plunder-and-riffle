@@ -2,8 +2,9 @@
  * Ralph loop — lead processing pipeline.
  *
  * Stages:
- *   raw → scored (score < threshold → rejected_low_score)
- *   scored → pending_approval (or auto-approved if mode = 'auto')
+ *   raw → scored (recommended_action=discard → rejected_low_score)
+ *       → scored [review]  — waits for manual approval, no auto-draft
+ *       → scored [draft]   — immediately batch-drafted in same classify tick
  *   pending_approval → approved → posted
  *
  * Batch design: N leads → 1 API call per stage (not N calls).
@@ -12,10 +13,15 @@
 import { db } from "@workspace/db";
 import { leadsTable, agentsTable, agentKeywordsTable } from "@workspace/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
-import { batchClassifyLeads, batchDraftResponses, classifyLead, draftResponse, hasBudget } from "./moltis.js";
+import {
+  batchClassifyLeads,
+  batchDraftResponses,
+  classifyLead,
+  draftResponse,
+  hasBudget,
+} from "./moltis.js";
 
-const CLASSIFY_THRESHOLD = 0.35;
-const BATCH_SIZE         = 20; // leads per API call
+const BATCH_SIZE = 20;
 
 // ─── Agent context ────────────────────────────────────────────────────────────
 
@@ -41,13 +47,18 @@ async function getAgentContext(): Promise<{
   ];
 
   return {
-    persona:      agent.persona || "Ralph, the BTC Experiment AI agent",
+    persona:      agent.persona || "Ralph Loop",
     keywords:     merged.length > 0 ? merged : DEFAULT_KEYWORDS,
     approvalMode: agent.leadApprovalMode,
   };
 }
 
 // ─── Stage 1: Classify raw leads (batch) ──────────────────────────────────────
+//
+// recommended_action routing:
+//   discard → rejected_low_score immediately
+//   review  → scored (no auto-draft — waits for manual action)
+//   draft   → scored + batch-draft immediately in same tick
 
 export async function classifyRawLeads(): Promise<{ processed: number; rejected: number; skipped: number }> {
   const context = await getAgentContext();
@@ -69,7 +80,7 @@ export async function classifyRawLeads(): Promise<{ processed: number; rejected:
 
   console.log(`[ralph] batch classifying ${rawLeads.length} raw leads (1 API call)`);
 
-  const inputs  = rawLeads.map(l => ({ id: l.id, content: l.content }));
+  const inputs = rawLeads.map(l => ({ id: l.id, content: l.content }));
   const { results, usedFallback } = await batchClassifyLeads(inputs, context.keywords);
 
   if (usedFallback) {
@@ -79,29 +90,64 @@ export async function classifyRawLeads(): Promise<{ processed: number; rejected:
   let rejected = 0;
   const now = new Date();
 
+  // Separate into buckets
+  const draftLeads:      typeof rawLeads = [];
+  const draftReplyStyles: string[]       = [];
+
   for (let i = 0; i < rawLeads.length; i++) {
     const lead   = rawLeads[i];
     const result = results[i];
-    if (!result) continue;
+    if (!lead || !result) continue;
 
-    const { score, reason } = result;
+    const { score, reason, recommendedAction, replyStyle, scoreDetails } = result;
 
-    if (score < CLASSIFY_THRESHOLD) {
+    if (recommendedAction === "discard") {
       await db.update(leadsTable).set({
         status:         "rejected_low_score",
         score,
         scoreReason:    reason,
+        scoreDetails:   scoreDetails ?? null,
+        replyStyle:     replyStyle,
         rejectedAt:     now,
-        rejectedReason: `Score ${score} below threshold ${CLASSIFY_THRESHOLD}`,
+        rejectedReason: `Low relevance — action: discard (score ${score})`,
         updatedAt:      now,
       }).where(eq(leadsTable.id, lead.id));
       rejected++;
     } else {
+      // Both "review" and "draft" go to scored first
       await db.update(leadsTable).set({
-        status:      "scored",
+        status:       "scored",
         score,
-        scoreReason: reason,
-        updatedAt:   now,
+        scoreReason:  reason,
+        scoreDetails: scoreDetails ?? null,
+        replyStyle:   replyStyle,
+        updatedAt:    now,
+      }).where(eq(leadsTable.id, lead.id));
+
+      if (recommendedAction === "draft") {
+        draftLeads.push(lead);
+        draftReplyStyles.push(replyStyle);
+      }
+    }
+  }
+
+  // Immediately draft the "draft" bucket in the same classify tick
+  if (draftLeads.length > 0) {
+    console.log(`[ralph] immediately drafting ${draftLeads.length} high-intent leads`);
+    const draftInputs = draftLeads.map(l => ({ id: l.id, content: l.content }));
+    const { results: draftResults } = await batchDraftResponses(draftInputs, context.persona, draftReplyStyles);
+
+    const nextStatus = context.approvalMode === "auto" ? "approved" : "pending_approval";
+
+    for (let i = 0; i < draftLeads.length; i++) {
+      const lead   = draftLeads[i];
+      const result = draftResults[i];
+      if (!lead || !result) continue;
+
+      await db.update(leadsTable).set({
+        status:    nextStatus,
+        draft:     result.draft,
+        updatedAt: now,
       }).where(eq(leadsTable.id, lead.id));
     }
   }
@@ -109,7 +155,10 @@ export async function classifyRawLeads(): Promise<{ processed: number; rejected:
   return { processed: rawLeads.length, rejected, skipped: 0 };
 }
 
-// ─── Stage 2: Draft for scored leads (batch) ──────────────────────────────────
+// ─── Stage 2: Draft for "review" leads that are waiting ───────────────────────
+//
+// These are leads the admin has manually upgraded to "scored" for drafting,
+// or leads where we deferred the draft (recommended_action=review).
 
 export async function draftScoredLeads(): Promise<{ drafted: number; skipped: number }> {
   const context = await getAgentContext();
@@ -119,17 +168,20 @@ export async function draftScoredLeads(): Promise<{ drafted: number; skipped: nu
     console.warn("[ralph] daily API budget exhausted — using fallback for drafting");
   }
 
+  // Only draft scored leads that don't yet have a draft
   const scoredLeads = await db
     .select().from(leadsTable)
-    .where(eq(leadsTable.status, "scored"))
+    .where(and(eq(leadsTable.status, "scored")))
     .limit(BATCH_SIZE);
 
-  if (scoredLeads.length === 0) return { drafted: 0, skipped: 0 };
+  const needsDraft = scoredLeads.filter(l => !l.draft);
+  if (needsDraft.length === 0) return { drafted: 0, skipped: scoredLeads.length - needsDraft.length };
 
-  console.log(`[ralph] batch drafting ${scoredLeads.length} scored leads (1 API call)`);
+  console.log(`[ralph] batch drafting ${needsDraft.length} scored leads (1 API call)`);
 
-  const inputs  = scoredLeads.map(l => ({ id: l.id, content: l.content }));
-  const { results, usedFallback } = await batchDraftResponses(inputs, context.persona);
+  const inputs      = needsDraft.map(l => ({ id: l.id, content: l.content }));
+  const replyStyles = needsDraft.map(l => l.replyStyle ?? "helpful");
+  const { results, usedFallback } = await batchDraftResponses(inputs, context.persona, replyStyles);
 
   if (usedFallback) {
     console.log("[ralph] drafting used fallback (no API key or budget)");
@@ -139,10 +191,10 @@ export async function draftScoredLeads(): Promise<{ drafted: number; skipped: nu
   const nextStatus = context.approvalMode === "auto" ? "approved" : "pending_approval";
   let drafted      = 0;
 
-  for (let i = 0; i < scoredLeads.length; i++) {
-    const lead   = scoredLeads[i];
+  for (let i = 0; i < needsDraft.length; i++) {
+    const lead   = needsDraft[i];
     const result = results[i];
-    if (!result) continue;
+    if (!lead || !result) continue;
 
     await db.update(leadsTable).set({
       status:    nextStatus,
@@ -153,7 +205,7 @@ export async function draftScoredLeads(): Promise<{ drafted: number; skipped: nu
     drafted++;
   }
 
-  return { drafted, skipped: 0 };
+  return { drafted, skipped: scoredLeads.length - needsDraft.length };
 }
 
 // ─── Full cycle ────────────────────────────────────────────────────────────────
@@ -169,9 +221,9 @@ export async function runRalphLoop(): Promise<{
   ]);
 
   const summary = {
-    classified:          classifyResult.processed,
-    classifiedRejected:  classifyResult.rejected,
-    drafted:             draftResult.drafted,
+    classified:         classifyResult.processed,
+    classifiedRejected: classifyResult.rejected,
+    drafted:            draftResult.drafted,
   };
 
   if (summary.classified > 0 || summary.drafted > 0) {
@@ -207,7 +259,7 @@ export async function markLeadPosted(leadId: string): Promise<boolean> {
   return result.length > 0;
 }
 
-// ─── Manual single-lead classify/draft (used by UI endpoints) ─────────────────
+// ─── Manual single-lead reclassify/redraft ─────────────────────────────────────
 
 export async function reclassifyLead(leadId: string): Promise<boolean> {
   const context = await getAgentContext();
@@ -216,17 +268,21 @@ export async function reclassifyLead(leadId: string): Promise<boolean> {
   const lead = await db.select().from(leadsTable).where(eq(leadsTable.id, leadId)).limit(1).then(r => r[0]);
   if (!lead) return false;
 
-  const { score, reason } = await classifyLead(lead.content, context.keywords);
+  const result = await classifyLead(lead.content, context.keywords);
+  const { score, reason, recommendedAction, replyStyle, scoreDetails } = result;
   const now = new Date();
 
-  if (score < CLASSIFY_THRESHOLD) {
+  if (recommendedAction === "discard") {
     await db.update(leadsTable).set({
       status: "rejected_low_score", score, scoreReason: reason,
-      rejectedAt: now, rejectedReason: `Score ${score} below threshold`, updatedAt: now,
+      scoreDetails: scoreDetails ?? null, replyStyle,
+      rejectedAt: now, rejectedReason: `Low relevance — action: discard (score ${score})`, updatedAt: now,
     }).where(eq(leadsTable.id, leadId));
   } else {
-    await db.update(leadsTable).set({ status: "scored", score, scoreReason: reason, updatedAt: now })
-      .where(eq(leadsTable.id, leadId));
+    await db.update(leadsTable).set({
+      status: "scored", score, scoreReason: reason,
+      scoreDetails: scoreDetails ?? null, replyStyle, updatedAt: now,
+    }).where(eq(leadsTable.id, leadId));
   }
   return true;
 }
@@ -238,7 +294,7 @@ export async function redraftLead(leadId: string): Promise<boolean> {
   const lead = await db.select().from(leadsTable).where(eq(leadsTable.id, leadId)).limit(1).then(r => r[0]);
   if (!lead) return false;
 
-  const { draft } = await draftResponse(lead.content, context.persona, lead.postUrl);
+  const { draft } = await draftResponse(lead.content, context.persona, lead.postUrl, lead.replyStyle ?? undefined);
   await db.update(leadsTable).set({ draft, updatedAt: new Date() }).where(eq(leadsTable.id, leadId));
   return true;
 }
