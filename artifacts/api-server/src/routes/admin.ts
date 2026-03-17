@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable } from "@workspace/db/schema";
+import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable, personalRotatorLinksTable } from "@workspace/db/schema";
 import { eq, and, gt, count } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
 import { moltisStatusWithUsage, getDailyUsage } from "../lib/moltis.js";
@@ -124,12 +124,22 @@ router.get("/admin/users", requireAdmin, async (req, res) => {
     const total = await db.select({ count: count() }).from(usersTable).then(r => Number(r[0]?.count ?? 0));
 
     const enriched = await Promise.all(users.map(async (user) => {
-      const [offerSignupCount, activeSlots, referralCount] = await Promise.all([
+      const [offerSignupCount, activeSlots, referralCount, walletLinks] = await Promise.all([
         db.select({ count: count() }).from(offerSignupsTable).where(eq(offerSignupsTable.userId, user.id)).then(r => Number(r[0]?.count ?? 0)),
         db.select({ count: count() }).from(rotatorSlotsTable).where(and(eq(rotatorSlotsTable.userId, user.id), eq(rotatorSlotsTable.status, "active"), gt(rotatorSlotsTable.expiresAt, now))).then(r => Number(r[0]?.count ?? 0)),
         db.select({ count: count() }).from(usersTable).where(eq(usersTable.referredById, user.id)).then(r => Number(r[0]?.count ?? 0)),
+        db.select({ url: personalRotatorLinksTable.url, displayName: personalRotatorLinksTable.displayName, linkType: personalRotatorLinksTable.linkType })
+          .from(personalRotatorLinksTable)
+          .where(and(eq(personalRotatorLinksTable.userId, user.id), eq(personalRotatorLinksTable.isActive, true)))
+          .limit(5),
       ]);
-      return { id: user.id, email: user.email, slug: user.slug, displayName: user.displayName, role: user.role, createdAt: user.createdAt, offerSignupCount, activeSlots, referralCount };
+      return {
+        id: user.id, email: user.email, slug: user.slug, displayName: user.displayName,
+        role: user.role, createdAt: user.createdAt,
+        offerSignupCount, activeSlots, referralCount,
+        walletLinks,
+        primaryWalletUrl: walletLinks[0]?.url ?? null,
+      };
     }));
 
     res.json({ users: enriched, total });

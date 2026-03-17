@@ -864,6 +864,7 @@ export default function Admin() {
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Joined</TableHead>
+                    <TableHead>Wallet / Links</TableHead>
                     <TableHead>Offers</TableHead>
                     <TableHead>Active Slots</TableHead>
                     <TableHead>Referral Code</TableHead>
@@ -871,24 +872,52 @@ export default function Admin() {
                 </TableHeader>
                 <TableBody>
                   {usersRes?.users?.length === 0 && (
-                    <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">No users yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No users yet.</TableCell></TableRow>
                   )}
-                  {usersRes?.users?.map(u => (
-                    <TableRow key={u.id}>
-                      <TableCell className="font-medium">{u.email}</TableCell>
-                      <TableCell>
-                        <Badge variant={u.role === "admin" ? "destructive" : "secondary"}>{u.role}</Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(u.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="font-mono">{u.offerSignupCount}</TableCell>
-                      <TableCell>
-                        <span className={u.activeSlots > 0 ? "text-primary font-bold" : "text-muted-foreground"}>{u.activeSlots}</span>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{(u as any).referralCode || "—"}</TableCell>
-                    </TableRow>
-                  ))}
+                  {usersRes?.users?.map(u => {
+                    const walletLinks = (u as any).walletLinks as Array<{ url: string; displayName: string; linkType: string }> ?? [];
+                    const primaryUrl = (u as any).primaryWalletUrl as string | null;
+                    return (
+                      <TableRow key={u.id}>
+                        <TableCell className="font-medium">{u.email}</TableCell>
+                        <TableCell>
+                          <Badge variant={u.role === "admin" ? "destructive" : "secondary"}>{u.role}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {new Date(u.createdAt).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="max-w-xs">
+                          {walletLinks.length === 0 ? (
+                            <span className="text-xs text-muted-foreground/50 italic">none set</span>
+                          ) : (
+                            <div className="space-y-1">
+                              {walletLinks.map((lnk, i) => (
+                                <div key={i} className="flex items-center gap-1.5">
+                                  <a
+                                    href={lnk.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-primary hover:underline truncate max-w-[180px]"
+                                    title={lnk.url}
+                                  >
+                                    {lnk.displayName || lnk.url}
+                                  </a>
+                                  {lnk.linkType && lnk.linkType !== "offer" && (
+                                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 shrink-0">{lnk.linkType}</Badge>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-mono">{u.offerSignupCount}</TableCell>
+                        <TableCell>
+                          <span className={u.activeSlots > 0 ? "text-primary font-bold" : "text-muted-foreground"}>{u.activeSlots}</span>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{(u as any).referralCode || "—"}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
