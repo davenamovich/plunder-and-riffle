@@ -1,0 +1,675 @@
+You are a principal full-stack engineer, systems architect, agent-runtime designer, and growth-product builder.
+
+Your task is to design and scaffold a build-ready MVP for:
+
+THE BTC EXPERIMENT — ONE AGENT / DUAL ROTATOR MVP
+
+This MVP is built around:
+- one main agent
+- one main agent rotator
+- one personal rotator per user
+- Ralph-loop lead generation
+- Moltis as the runtime/orchestration layer
+- free and paid 24-hour rotator spots
+- referral inheritance
+- a dynamic “live link tree” model
+- admin controls
+- future-ready NFT mint toggles
+- daily lead caps
+- offer-based user onboarding
+
+This is NOT a generic chatbot.
+This is NOT a normal affiliate dashboard.
+This is NOT a giant multi-agent platform yet.
+
+This is a focused MVP to prove a specific model:
+- one agent generates leads and attention
+- users sign up for the qualifying offer
+- users get 24 hours in the main agent rotator
+- users also get a personal rotator to monetize their own network further
+- the whole system behaves like a monetized, referral-aware, live link tree
+- paid spots scale what works after free proof-of-value
+
+==================================================
+CORE PRODUCT THESIS
+==================================================
+
+This MVP proves that one AI-powered agent can:
+
+1. attract attention
+2. generate signups
+3. route traffic into an offer network
+4. place users into a 24-hour agent rotator
+5. help users monetize their own network with a personal rotator
+6. create compounding referral value through inherited links
+7. function like a live, dynamic monetized link tree
+
+The core message is:
+
+“Let the agent prove it first.”
+
+Users should not need to buy anything upfront.
+Users should not need crypto knowledge.
+Users should be able to start with email only.
+
+==================================================
+CORE ECONOMIC MODEL
+==================================================
+
+This system is built on one simple idea:
+
+- free spots prove the value
+- paid spots scale the value
+
+Each qualifying signup gives the user 24 hours in the agent rotator.
+
+There are two rotator slot types:
+
+1. FREE SPOTS
+- unlocked by joining the qualifying offer
+- 24-hour duration
+- proof-of-value
+- one active free slot per user per agent
+
+2. PAID SPOTS
+- optional
+- 24-hour duration
+- dynamically priced based on demand
+- weighted higher than free spots
+- intended to scale what is already working
+
+Core economic anchor:
+“What is a real human lead worth?”
+
+These are Web2 offers that only humans can complete.
+Agents cannot complete them.
+Agents generate and route intent.
+Humans complete the action.
+The system captures and distributes the value.
+
+==================================================
+TWO ROTATOR MODEL
+==================================================
+
+This MVP has two distinct rotators:
+
+1. AGENT ROTATOR
+2. PERSONAL ROTATOR
+
+==================================================
+1. AGENT ROTATOR
+==================================================
+
+The agent rotator is the main public traffic rotator.
+
+Purpose:
+- generate signups for the offer
+- prove traffic value to users
+- distribute incoming traffic
+- create free-to-paid upgrade pressure
+- act as the main monetization engine
+
+Rules:
+- every user who signs up for the qualifying offer gets 24 hours in the agent rotator
+- the agent rotator has free and paid spots
+- each spot lasts 24 hours
+- paid spots receive stronger weighted exposure than free spots
+- incoming traffic to the agent landing page is routed to the next eligible user in the agent rotator
+- if no eligible rotator user exists, fallback goes to the base offer / house link / admin link
+
+Suggested MVP defaults:
+- 25 free slots
+- 25 paid slots
+- free weight = 1
+- paid weight = 3
+- duration = 24 hours
+- weighted round robin routing
+- deterministic server-side state
+- one active free slot per user per agent
+- one active paid slot per user per agent unless admin changes it
+
+==================================================
+2. PERSONAL ROTATOR
+==================================================
+
+Every user gets a PERSONAL ROTATOR.
+
+Purpose:
+- let users monetize their own network further
+- create a shareable personal page
+- act like a dynamic referral-aware link tree
+- rotate through the offers and links the user should share
+- preserve inherited referral logic
+- give the user one master page to distribute
+
+The personal rotator should:
+- show or rotate through the offers the user has access to
+- use the correct inherited referral links
+- update automatically as the user signs up for more offers
+- let the user share one page that monetizes their audience
+
+The personal rotator is not just a profile page.
+It is a monetization surface.
+
+==================================================
+REFERRAL INHERITANCE LOGIC
+==================================================
+
+This is a critical first-class feature.
+
+When a new user signs up under a referrer:
+- the new user should use the referrer’s links for every offer the referrer has already joined
+- those inherited links should populate the new user’s personal rotator
+- if the new user signs up for those offers, attribution should reflect the inherited upstream referral logic
+- this creates a compounding network effect
+
+Example:
+- Referrer has joined Offer A, Offer B, Offer C
+- New user joins through that referrer
+- New user’s system-generated signup links for those offers should use the referrer’s referral URLs or tracked inherited equivalents
+- new user can then share their own personal rotator, which is aware of the proper upstream logic
+
+The system should behave like a smart, live, monetized link tree.
+
+==================================================
+MOLTIS INTEGRATION REQUIREMENT (CRITICAL)
+==================================================
+
+We are using Moltis as the runtime and orchestration layer for the agent.
+
+Design around Moltis’s strengths:
+- single binary runtime
+- sandboxed execution
+- approval-gated actions
+- MCP support
+- hooks
+- scheduling / cron
+- multi-channel support
+- JSON-RPC + GraphQL API
+- encrypted secret vault
+- persona-based operation
+
+For this MVP, Moltis should NOT be the source of truth for product data.
+
+Moltis should be used for:
+- running the one main agent persona
+- executing the Ralph loop
+- orchestrating lead classification and comment drafting
+- managing guarded tool calls
+- future MCP integrations
+- future external channels if needed
+
+Moltis should NOT own:
+- rotator truth
+- payout truth
+- referral truth
+- ledger truth
+- slot accounting truth
+- pricing truth
+
+The source of truth should remain:
+- Next.js backend / application services
+- Postgres
+- Redis job queues
+
+==================================================
+ARCHITECTURE BOUNDARIES
+==================================================
+
+Use this architecture:
+
+WEB APP / NEXT.JS
+- landing page
+- one main agent page
+- personal rotator page
+- user dashboard
+- admin dashboard
+- offer signup flow
+- referral attribution
+- redirect handlers
+- click tracking
+- pricing display
+- admin controls
+
+POSTGRES
+- users
+- auth identities
+- agent
+- agent settings
+- offers
+- offer signups
+- referrals
+- inherited referral links
+- rotator slots
+- rotator clicks
+- lead candidates
+- lead scores
+- drafted comments
+- posted comments
+- personal rotator links
+- pricing rules
+- lead caps
+- admin actions
+- ledger entries
+- nft settings
+
+REDIS
+- slot activation jobs
+- slot expiration jobs
+- Ralph-loop classification jobs
+- drafting queue
+- approval queue
+- metrics aggregation jobs
+- lead-cap reset jobs
+
+MOLTIS
+- one main agent runtime
+- persona and instructions
+- Ralph-loop execution
+- tool orchestration
+- guarded public action flow
+- future external channels
+- future MCP tools
+
+==================================================
+RALPH LOOP + MOLTIS
+==================================================
+
+The Ralph loop should run through Moltis, but results must be written back into our app/database.
+
+Flow:
+1. candidate leads are ingested by the app or worker
+2. candidates are stored in Postgres
+3. batches are queued in Redis
+4. Moltis consumes a batch job through a thin adapter layer
+5. Moltis runs classification/scoring logic
+6. Moltis returns structured results
+7. app stores those results in Postgres
+8. drafting jobs are queued
+9. Moltis drafts comments
+10. drafts are stored in Postgres
+11. admin approves or future rules auto-post them
+12. resulting actions and KPIs are logged back into Postgres
+
+Do not tightly couple app logic directly to Moltis internals.
+Use a thin adapter/service boundary.
+
+==================================================
+KEYWORD CUSTOMIZATION + ICP BUILDER
+==================================================
+
+Users should have two modes:
+
+OPTION A — MANUAL KEYWORDS
+- user enters niche keywords
+- user enters pain-point phrases
+- user enters buyer-intent phrases
+- user tunes targeting manually
+
+OPTION B — BUILT-IN ICP BUILDER
+- user provides affiliate link or offer URL
+- system analyzes the link / landing page / offer description
+- system infers:
+  - ideal customer profile
+  - keywords
+  - pain points
+  - buyer-intent phrases
+  - CTA angles
+  - outreach themes
+
+The ICP builder should generate a practical starter setup for the agent.
+
+==================================================
+AGENT PAGE / CTA LOGIC
+==================================================
+
+The main agent has its own landing page.
+
+This page should:
+- explain the offer
+- explain free and paid 24-hour rotator spots
+- explain “let the agent prove it first”
+- let users sign up
+- show current performance metrics if available
+- have CTA buttons
+
+Critical rule:
+- the agent page CTA should route to the NEXT USER in the agent rotator
+- it should not always go straight to the house link
+- this is how the rotator proves value
+
+Fallback:
+- if no active eligible user exists
+- or lead cap is reached
+- or routing is paused
+- route to the house/admin fallback link
+
+==================================================
+DAILY LEAD CAP
+==================================================
+
+The main agent should support a daily lead cap.
+
+Purpose:
+- protect offer economics
+- prevent overselling
+- avoid overdelivery
+- keep traffic quality manageable
+
+Need:
+- daily cap per agent
+- optional cap by slot type
+- behavior when cap reached:
+  - fallback to house link
+  - pause public routing
+  - optionally queue overflow
+  - admin-configurable behavior
+
+==================================================
+ADMIN CONTROLS
+==================================================
+
+Need admin controls for:
+- free slot capacity
+- paid slot capacity
+- paid price override
+- demand pricing rules
+- fallback offer link
+- lead approval mode
+- lead cap
+- rotator pause/resume
+- routing override
+- abuse flags
+- comment approval mode
+- NFT mint toggle scaffold
+
+NFT minting does not need to be fully implemented in MVP,
+but architecture should be ready for:
+- admin-controlled mint enable/disable
+- future linking of agent ownership to mint state
+
+==================================================
+LIVE LINK TREE CONCEPT
+==================================================
+
+This entire system should behave like a smart monetized link tree.
+
+Two surfaces:
+1. AGENT PAGE
+- public traffic enters here
+- routed to next active rotator participant
+
+2. PERSONAL ROTATOR PAGE
+- user shares this page
+- it contains or rotates through the correct inherited offer links
+- it helps the user monetize their own audience
+
+==================================================
+MVP UX GOAL
+==================================================
+
+A user should be able to:
+1. sign up with email
+2. land on the one agent page
+3. join the offer
+4. get 24 hours in the agent rotator
+5. receive traffic
+6. access their own personal rotator page
+7. share that page
+8. inherit correct referral links
+9. optionally buy a paid rotator spot
+10. customize keywords or use ICP builder
+
+==================================================
+TECH STACK
+==================================================
+
+Use:
+- Next.js App Router
+- TypeScript
+- Tailwind
+- Postgres
+- Redis
+- Privy for email-first onboarding
+- Moltis as runtime/orchestration layer
+- Chutes.ai-ready provider boundaries
+- local-first architecture
+- one Moltis instance for MVP
+
+Choose Prisma or Drizzle and explain why.
+
+==================================================
+DELIVERABLE FORMAT
+==================================================
+
+Produce the answer in this order:
+
+PART 1 — Opinionated architecture
+Explain the best architecture for:
+- one-agent MVP
+- agent rotator
+- personal rotator
+- Moltis runtime boundary
+- Ralph loop
+- admin controls
+- referral inheritance
+
+PART 2 — Repo / folder structure
+Provide a practical TypeScript codebase structure.
+
+PART 3 — Database schema
+Define schema for:
+- users
+- auth_identities
+- agents
+- agent_settings
+- agent_offers
+- offer_signups
+- rotator_slots
+- rotator_clicks
+- rotator_queue
+- personal_rotators
+- personal_rotator_links
+- referrals
+- inherited_referral_links
+- lead_candidates
+- lead_scores
+- drafted_comments
+- posted_comments
+- icp_profiles
+- keyword_sets
+- admin_actions
+- lead_caps
+- nft_settings
+- pricing_rules
+- ledger_entries
+
+For each:
+- key fields
+- relationships
+- indexes
+- mutable vs immutable fields
+- auditability notes
+
+PART 4 — Exact rotator logic
+Define:
+- agent rotator lifecycle
+- personal rotator lifecycle
+- free slot rules
+- paid slot rules
+- weighted routing rules
+- fallback rules
+- queueing rules
+- expiration rules
+- lead cap behavior
+- click logging
+- edge cases
+
+PART 5 — Referral inheritance spec
+Explain exactly how:
+- new users inherit the referrer’s joined-offer links
+- those links are stored
+- personal rotator links are generated
+- attribution is preserved
+- inherited signup cascades work
+
+PART 6 — Moltis integration spec
+Define:
+- one local Moltis instance
+- agent persona configuration
+- Moltis adapter boundary
+- Redis job flow into Moltis
+- structured response format out of Moltis
+- approval-gated public action flow
+- idempotency and failure handling
+- what should be tools vs app services
+
+PART 7 — Ralph-loop lead engine spec
+Define:
+- candidate ingestion
+- deterministic filtering
+- batch scoring
+- drafting
+- approval flow
+- posting flow
+- routing into the agent page
+- KPI logging
+
+PART 8 — ICP builder spec
+Define how the system:
+- accepts affiliate link / offer URL
+- extracts or summarizes offer info
+- infers ideal ICP
+- generates starter keywords
+- generates pain points and angles
+- proposes CTA ideas
+
+PART 9 — Next.js route map
+Define routes for:
+- homepage
+- agent page
+- personal rotator page
+- dashboard
+- admin
+- redirect endpoints
+- signup endpoints
+- keyword settings
+- ICP builder
+- API routes / server actions
+
+PART 10 — Dashboard spec
+User dashboard should show:
+- active free timer
+- active paid timer
+- personal rotator link
+- offers joined
+- clicks
+- estimated value
+- keyword settings
+- inherited offers
+- next steps
+
+Admin dashboard should show:
+- agent health
+- free/paid occupancy
+- queue
+- lead cap status
+- clicks
+- conversions
+- keyword performance
+- drafted comments
+- posted comments
+- pricing state
+- NFT toggle
+- abuse flags
+- Moltis runtime health
+
+PART 11 — Starter TypeScript scaffolding
+Generate starter code or strong pseudocode for:
+- DB client
+- Redis client
+- Moltis adapter service
+- agent rotator service
+- personal rotator service
+- referral inheritance service
+- signup / activation service
+- weighted selector
+- redirect handler
+- lead cap guard
+- Ralph-loop worker
+- ICP builder service
+- dashboard query layer
+
+PART 12 — Homepage copy
+Write actual copy for:
+- hero
+- one-agent explanation
+- free vs paid spots
+- personal rotator explanation
+- “let the agent prove it first”
+- CTA section
+
+Tone:
+- sharp
+- simple
+- credible
+- opportunity-driven
+
+PART 13 — Build phases
+Create:
+- Phase 1A
+- Phase 1B
+- Phase 1C
+
+PART 14 — Risks and tradeoffs
+Be honest about:
+- what should stay manual first
+- what is fragile
+- what can be deferred
+- what likely breaks first
+
+==================================================
+KEY PRODUCT RULES
+==================================================
+
+1. There is one main agent in the MVP.
+2. That agent has its own main rotator.
+3. Users get 24 hours in that rotator when they sign up for the qualifying offer.
+4. There are free and paid rotator slots.
+5. Paid slots get stronger weighted exposure.
+6. Every user gets a personal rotator to monetize their own network.
+7. The personal rotator acts like a live referral-aware link tree.
+8. New users should use the referrer’s links for every offer the referrer has already joined.
+9. The system supports manual keywords or automatic ICP generation from an affiliate link.
+10. The agent CTA routes to the next eligible user in the rotator.
+11. Admin controls NFT toggle and daily lead cap.
+12. Moltis runs the agent behavior and Ralph loop, but does not own business truth.
+13. The system must be deterministic, auditable, and MVP-friendly.
+
+==================================================
+ENGINEERING BIAS
+==================================================
+
+When uncertain, choose:
+- simple over clever
+- deterministic over magical
+- auditable over opaque
+- server-side truth over frontend hacks
+- practical over theoretical
+- buildable over over-architected
+
+Do not give vague startup advice.
+Do not give generic agent philosophy.
+Design this like it will actually be built now.
+
+At the end, ask which code artifact to generate first from this list:
+
+1. full schema
+2. route scaffold
+3. agent rotator service
+4. personal rotator service
+5. referral inheritance logic
+6. Moltis adapter
+7. Ralph-loop worker
+8. ICP builder service
+9. homepage UI

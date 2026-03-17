@@ -1,22 +1,38 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: BTC Experiment API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: agent
+    description: Agent operations
+  - name: rotator
+    description: Rotator operations
+  - name: offers
+    description: Offer operations
+  - name: leads
+    description: Lead operations
+  - name: dashboard
+    description: User dashboard
+  - name: admin
+    description: Admin operations
+  - name: icp
+    description: ICP builder
+  - name: referral
+    description: Referral operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +40,1095 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login or register with email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /agent/{slug}:
+    get:
+      operationId: getAgent
+      tags: [agent]
+      summary: Get agent public info
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Agent info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentPublicInfo"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /agent/{slug}/stats:
+    get:
+      operationId: getAgentStats
+      tags: [agent]
+      summary: Get agent live stats
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Agent stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentStats"
+
+  /rotator/redirect/{agentSlug}:
+    get:
+      operationId: rotatorRedirect
+      tags: [rotator]
+      summary: Redirect to next rotator participant
+      parameters:
+        - name: agentSlug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: ref
+          in: query
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect
+        "200":
+          description: Redirect info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RedirectInfo"
+
+  /rotator/slots:
+    get:
+      operationId: getMyRotatorSlots
+      tags: [rotator]
+      summary: Get current user rotator slots
+      responses:
+        "200":
+          description: User rotator slots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RotatorSlotsResponse"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /rotator/buy:
+    post:
+      operationId: buyRotatorSlot
+      tags: [rotator]
+      summary: Buy a paid rotator slot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BuySlotRequest"
+      responses:
+        "200":
+          description: Slot purchased
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RotatorSlot"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /offers:
+    get:
+      operationId: listOffers
+      tags: [offers]
+      summary: List available offers
+      responses:
+        "200":
+          description: Offers list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OffersListResponse"
+
+  /offers/signup:
+    post:
+      operationId: signupForOffer
+      tags: [offers]
+      summary: Sign up for an offer (unlocks rotator slot)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OfferSignupRequest"
+      responses:
+        "200":
+          description: Signed up
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OfferSignupResponse"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /offers/my:
+    get:
+      operationId: getMyOffers
+      tags: [offers]
+      summary: Get current user offers
+      responses:
+        "200":
+          description: User offers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyOffersResponse"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /personal-rotator/{userSlug}:
+    get:
+      operationId: getPersonalRotator
+      tags: [rotator]
+      summary: Get personal rotator page
+      parameters:
+        - name: userSlug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Personal rotator info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalRotatorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /personal-rotator/my:
+    get:
+      operationId: getMyPersonalRotator
+      tags: [rotator]
+      summary: Get current user personal rotator
+      responses:
+        "200":
+          description: Personal rotator info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalRotatorResponse"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leads/ingest:
+    post:
+      operationId: ingestLead
+      tags: [leads]
+      summary: Ingest a lead candidate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestLeadRequest"
+      responses:
+        "200":
+          description: Lead ingested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadResponse"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leads:
+    get:
+      operationId: listLeads
+      tags: [leads]
+      summary: List leads (admin)
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Leads list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadsListResponse"
+
+  /leads/{id}/approve:
+    post:
+      operationId: approveLead
+      tags: [leads]
+      summary: Approve a drafted comment for posting
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lead approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadResponse"
+
+  /icp/build:
+    post:
+      operationId: buildIcp
+      tags: [icp]
+      summary: Build ICP from offer URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BuildIcpRequest"
+      responses:
+        "200":
+          description: ICP built
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IcpResponse"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /keywords:
+    get:
+      operationId: getMyKeywords
+      tags: [agent]
+      summary: Get current user keywords
+      responses:
+        "200":
+          description: Keywords
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeywordsResponse"
+    put:
+      operationId: updateMyKeywords
+      tags: [agent]
+      summary: Update current user keywords
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateKeywordsRequest"
+      responses:
+        "200":
+          description: Keywords updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeywordsResponse"
+
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get user dashboard stats
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStatsResponse"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /referral/my:
+    get:
+      operationId: getMyReferral
+      tags: [referral]
+      summary: Get my referral info
+      responses:
+        "200":
+          description: Referral info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferralInfo"
+
+  /admin/settings:
+    get:
+      operationId: getAdminSettings
+      tags: [admin]
+      summary: Get admin settings
+      responses:
+        "200":
+          description: Admin settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSettings"
+    put:
+      operationId: updateAdminSettings
+      tags: [admin]
+      summary: Update admin settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminSettingsUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSettings"
+
+  /admin/rotator:
+    get:
+      operationId: getAdminRotatorSlots
+      tags: [admin]
+      summary: Get all active rotator slots
+      responses:
+        "200":
+          description: All slots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminRotatorResponse"
+
+  /admin/rotator/{slotId}/expire:
+    post:
+      operationId: adminExpireSlot
+      tags: [admin]
+      summary: Force expire a rotator slot
+      parameters:
+        - name: slotId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Slot expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List all users
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Users list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUsersResponse"
+
+  /admin/leads:
+    get:
+      operationId: listAdminLeads
+      tags: [admin]
+      summary: List leads with drafts
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Leads list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadsListResponse"
+
+  /cron/tick:
+    post:
+      operationId: cronTick
+      tags: [health]
+      summary: Internal worker tick
+      responses:
+        "200":
+          description: Tick processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    SuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+
+    UserProfile:
+      type: object
+      required: [id, email, slug, role, createdAt]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        slug:
+          type: string
+        displayName:
+          type: string
+        role:
+          type: string
+          enum: [user, admin]
+        createdAt:
+          type: string
+          format: date-time
+        referralCode:
+          type: string
+
+    LoginRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+        referralCode:
+          type: string
+
+    LoginResponse:
+      type: object
+      required: [user, token]
+      properties:
+        user:
+          $ref: "#/components/schemas/UserProfile"
+        token:
+          type: string
+
+    AgentPublicInfo:
+      type: object
+      required: [id, slug, name, description, offerUrl]
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        offerUrl:
+          type: string
+        fallbackUrl:
+          type: string
+        isPaused:
+          type: boolean
+        freeSlotCapacity:
+          type: integer
+        paidSlotCapacity:
+          type: integer
+        activeSlotCount:
+          type: integer
+        dailyCap:
+          type: integer
+        dailyLeadCount:
+          type: integer
+
+    AgentStats:
+      type: object
+      required: [totalSignups, activeFreeSlots, activePaidSlots, todayLeads, totalClicks]
+      properties:
+        totalSignups:
+          type: integer
+        activeFreeSlots:
+          type: integer
+        activePaidSlots:
+          type: integer
+        todayLeads:
+          type: integer
+        totalClicks:
+          type: integer
+
+    RedirectInfo:
+      type: object
+      required: [redirectUrl, slotType]
+      properties:
+        redirectUrl:
+          type: string
+        slotType:
+          type: string
+          enum: [free, paid, fallback]
+        userId:
+          type: string
+
+    RotatorSlot:
+      type: object
+      required: [id, userId, agentId, slotType, status, expiresAt, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        agentId:
+          type: string
+        slotType:
+          type: string
+          enum: [free, paid]
+        status:
+          type: string
+          enum: [active, expired, pending]
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        clickCount:
+          type: integer
+
+    RotatorSlotsResponse:
+      type: object
+      required: [slots]
+      properties:
+        slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/RotatorSlot"
+
+    BuySlotRequest:
+      type: object
+      required: [agentId]
+      properties:
+        agentId:
+          type: string
+
+    Offer:
+      type: object
+      required: [id, slug, name, description, offerUrl, isActive]
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        offerUrl:
+          type: string
+        logoUrl:
+          type: string
+        isActive:
+          type: boolean
+        isQualifying:
+          type: boolean
+
+    OffersListResponse:
+      type: object
+      required: [offers]
+      properties:
+        offers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Offer"
+
+    OfferSignupRequest:
+      type: object
+      required: [offerId]
+      properties:
+        offerId:
+          type: string
+        affiliateRef:
+          type: string
+
+    OfferSignupResponse:
+      type: object
+      required: [success, rotatorSlot]
+      properties:
+        success:
+          type: boolean
+        rotatorSlot:
+          $ref: "#/components/schemas/RotatorSlot"
+        message:
+          type: string
+
+    UserOffer:
+      type: object
+      required: [offerId, offerName, offerUrl, signedUpAt]
+      properties:
+        offerId:
+          type: string
+        offerName:
+          type: string
+        offerUrl:
+          type: string
+        inheritedRefUrl:
+          type: string
+        signedUpAt:
+          type: string
+          format: date-time
+
+    MyOffersResponse:
+      type: object
+      required: [offers]
+      properties:
+        offers:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserOffer"
+
+    PersonalRotatorLink:
+      type: object
+      required: [offerId, offerName, url, type]
+      properties:
+        offerId:
+          type: string
+        offerName:
+          type: string
+        url:
+          type: string
+        logoUrl:
+          type: string
+        type:
+          type: string
+          enum: [offer, custom]
+        displayOrder:
+          type: integer
+
+    PersonalRotatorResponse:
+      type: object
+      required: [userId, userSlug, displayName, links]
+      properties:
+        userId:
+          type: string
+        userSlug:
+          type: string
+        displayName:
+          type: string
+        bio:
+          type: string
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/PersonalRotatorLink"
+
+    IngestLeadRequest:
+      type: object
+      required: [source, externalId, content]
+      properties:
+        source:
+          type: string
+        externalId:
+          type: string
+        content:
+          type: string
+        authorHandle:
+          type: string
+        authorUrl:
+          type: string
+        postUrl:
+          type: string
+
+    LeadResponse:
+      type: object
+      required: [id, source, status, createdAt]
+      properties:
+        id:
+          type: string
+        source:
+          type: string
+        externalId:
+          type: string
+        status:
+          type: string
+          enum: [raw, scoring, scored, drafting, drafted, approved, posted, rejected]
+        score:
+          type: number
+        draft:
+          type: string
+        postedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    LeadsListResponse:
+      type: object
+      required: [leads, total]
+      properties:
+        leads:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeadResponse"
+        total:
+          type: integer
+
+    BuildIcpRequest:
+      type: object
+      required: [offerUrl]
+      properties:
+        offerUrl:
+          type: string
+
+    IcpResponse:
+      type: object
+      required: [keywords, painPoints, buyerIntentPhrases, ctaAngles, targetAudience]
+      properties:
+        keywords:
+          type: array
+          items:
+            type: string
+        painPoints:
+          type: array
+          items:
+            type: string
+        buyerIntentPhrases:
+          type: array
+          items:
+            type: string
+        ctaAngles:
+          type: array
+          items:
+            type: string
+        targetAudience:
+          type: string
+
+    KeywordsResponse:
+      type: object
+      required: [keywords, painPoints, buyerIntentPhrases]
+      properties:
+        keywords:
+          type: array
+          items:
+            type: string
+        painPoints:
+          type: array
+          items:
+            type: string
+        buyerIntentPhrases:
+          type: array
+          items:
+            type: string
+
+    UpdateKeywordsRequest:
+      type: object
+      required: [keywords, painPoints, buyerIntentPhrases]
+      properties:
+        keywords:
+          type: array
+          items:
+            type: string
+        painPoints:
+          type: array
+          items:
+            type: string
+        buyerIntentPhrases:
+          type: array
+          items:
+            type: string
+
+    DashboardStatsResponse:
+      type: object
+      required: [activeSlots, totalClicks, totalReferrals, personalRotatorViews, offerSignups]
+      properties:
+        activeSlots:
+          type: integer
+        totalClicks:
+          type: integer
+        totalReferrals:
+          type: integer
+        personalRotatorViews:
+          type: integer
+        offerSignups:
+          type: integer
+        earnedThisCycle:
+          type: number
+
+    ReferralInfo:
+      type: object
+      required: [referralCode, referralUrl, totalReferrals, pendingReferrals]
+      properties:
+        referralCode:
+          type: string
+        referralUrl:
+          type: string
+        totalReferrals:
+          type: integer
+        pendingReferrals:
+          type: integer
+        upstreamReferrer:
+          type: string
+
+    AdminSettings:
+      type: object
+      required: [freeSlotCapacity, paidSlotCapacity, freeSlotWeight, paidSlotWeight, slotDurationHours, dailyCap, fallbackUrl, isPaused, leadApprovalMode, nftMintEnabled]
+      properties:
+        freeSlotCapacity:
+          type: integer
+        paidSlotCapacity:
+          type: integer
+        freeSlotWeight:
+          type: integer
+        paidSlotWeight:
+          type: integer
+        slotDurationHours:
+          type: integer
+        dailyCap:
+          type: integer
+        fallbackUrl:
+          type: string
+        isPaused:
+          type: boolean
+        leadApprovalMode:
+          type: string
+          enum: [manual, auto]
+        nftMintEnabled:
+          type: boolean
+        paidSlotPrice:
+          type: number
+
+    AdminSettingsUpdate:
+      type: object
+      properties:
+        freeSlotCapacity:
+          type: integer
+        paidSlotCapacity:
+          type: integer
+        freeSlotWeight:
+          type: integer
+        paidSlotWeight:
+          type: integer
+        slotDurationHours:
+          type: integer
+        dailyCap:
+          type: integer
+        fallbackUrl:
+          type: string
+        isPaused:
+          type: boolean
+        leadApprovalMode:
+          type: string
+          enum: [manual, auto]
+        nftMintEnabled:
+          type: boolean
+        paidSlotPrice:
+          type: number
+
+    AdminRotatorSlot:
+      type: object
+      required: [id, userId, userEmail, userSlug, slotType, status, expiresAt, clickCount]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        userEmail:
+          type: string
+        userSlug:
+          type: string
+        slotType:
+          type: string
+          enum: [free, paid]
+        status:
+          type: string
+          enum: [active, expired, pending]
+        expiresAt:
+          type: string
+          format: date-time
+        clickCount:
+          type: integer
+
+    AdminRotatorResponse:
+      type: object
+      required: [slots, totalActive, totalFree, totalPaid]
+      properties:
+        slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminRotatorSlot"
+        totalActive:
+          type: integer
+        totalFree:
+          type: integer
+        totalPaid:
+          type: integer
+
+    AdminUser:
+      type: object
+      required: [id, email, slug, role, createdAt, offerSignupCount, activeSlots]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        slug:
+          type: string
+        displayName:
+          type: string
+        role:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        offerSignupCount:
+          type: integer
+        activeSlots:
+          type: integer
+        referralCount:
+          type: integer
+
+    AdminUsersResponse:
+      type: object
+      required: [users, total]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUser"
+        total:
+          type: integer

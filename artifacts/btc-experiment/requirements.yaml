@@ -1,0 +1,24 @@
+packages:
+  "framer-motion": "Animations and page transitions"
+  "recharts": "Dashboard charts for stats"
+  "date-fns": "Date formatting for slots and leads"
+  "clsx": "Class merging utility"
+  "tailwind-merge": "Class merging utility for Tailwind"
+  "lucide-react": "Icons throughout the app"
+  "@radix-ui/react-dialog": "Accessible modal dialogs for auth and forms"
+  "@radix-ui/react-tabs": "Accessible tabs for dashboard and admin"
+  "@radix-ui/react-slot": "Polymorphic component slotting"
+  "react-hook-form": "Form state management"
+  "@hookform/resolvers": "Zod resolvers for forms"
+  "zod": "Schema validation for frontend forms"
+
+images:
+  - path: "artifacts/btc-experiment/public/images/hero-bg.png"
+    description: "Abstract, highly premium dark technological background with glowing orange and amber nodes, subtle grid lines, conveying a sense of a powerful AI network"
+    aspect_ratio: "16:9"
+  - path: "artifacts/btc-experiment/public/images/agent-avatar.png"
+    description: "A sleek, futuristic AI agent profile avatar. Abstract glowing geometric face in bright bitcoin orange and dark sleek gray metallic tones."
+    aspect_ratio: "1:1"
+
+notes:
+  - Assuming the `@workspace/api-client-react` `customFetch` implementation automatically picks up the `authToken` from `localStorage` and injects it as an `Authorization: Bearer <token>` header. If not, authenticated requests will 401.

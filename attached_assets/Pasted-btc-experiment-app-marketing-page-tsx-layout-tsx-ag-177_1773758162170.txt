@@ -1,0 +1,173 @@
+btc-experiment/
+├── app/
+│   ├── (marketing)/
+│   │   ├── page.tsx
+│   │   └── layout.tsx
+│   ├── agent/
+│   │   └── [slug]/
+│   │       └── page.tsx
+│   ├── r/
+│   │   └── [slug]/
+│   │       └── page.tsx
+│   ├── dashboard/
+│   │   ├── page.tsx
+│   │   ├── offers/
+│   │   │   └── page.tsx
+│   │   ├── rotator/
+│   │   │   └── page.tsx
+│   │   └── keywords/
+│   │       └── page.tsx
+│   ├── admin/
+│   │   ├── page.tsx
+│   │   ├── agent/
+│   │   │   └── page.tsx
+│   │   ├── rotator/
+│   │   │   └── page.tsx
+│   │   ├── leads/
+│   │   │   └── page.tsx
+│   │   └── pricing/
+│   │       └── page.tsx
+│   ├── api/
+│   │   ├── auth/
+│   │   │   └── privy/
+│   │   │       └── route.ts
+│   │   ├── offers/
+│   │   │   ├── redeem/
+│   │   │   │   └── route.ts
+│   │   │   └── signup/
+│   │   │       └── route.ts
+│   │   ├── rotator/
+│   │   │   ├── redirect/
+│   │   │   │   └── route.ts
+│   │   │   ├── activate/
+│   │   │   │   └── route.ts
+│   │   │   ├── expire/
+│   │   │   │   └── route.ts
+│   │   │   └── queue/
+│   │   │       └── route.ts
+│   │   ├── leads/
+│   │   │   ├── ingest/
+│   │   │   │   └── route.ts
+│   │   │   ├── classify/
+│   │   │   │   └── route.ts
+│   │   │   ├── draft/
+│   │   │   │   └── route.ts
+│   │   │   └── approve/
+│   │   │       └── route.ts
+│   │   ├── icp/
+│   │   │   └── build/
+│   │   │       └── route.ts
+│   │   ├── keywords/
+│   │   │   └── route.ts
+│   │   ├── pricing/
+│   │   │   └── route.ts
+│   │   ├── cron/
+│   │   │   └── tick/
+│   │   │       └── route.ts
+│   │   └── health/
+│   │       ├── route.ts
+│   │       └── moltis/
+│   │           └── route.ts
+│   ├── layout.tsx
+│   └── globals.css
+│
+├── components/
+│   ├── ui/
+│   ├── marketing/
+│   ├── agent/
+│   ├── dashboard/
+│   ├── admin/
+│   └── shared/
+│
+├── lib/
+│   ├── db.ts
+│   ├── redis.ts
+│   ├── env.ts
+│   ├── auth.ts
+│   ├── logger.ts
+│   ├── constants.ts
+│   ├── utils.ts
+│   ├── pricing.ts
+│   ├── tracking.ts
+│   └── guards.ts
+│
+├── prisma/
+│   ├── schema.prisma
+│   └── seed.ts
+│
+├── services/
+│   ├── agent/
+│   │   ├── persona.service.ts
+│   │   ├── keyword.service.ts
+│   │   └── icp-builder.service.ts
+│   ├── rotator/
+│   │   ├── agent-rotator.service.ts
+│   │   ├── personal-rotator.service.ts
+│   │   ├── selector.service.ts
+│   │   ├── activation.service.ts
+│   │   ├── expiration.service.ts
+│   │   └── click-log.service.ts
+│   ├── offers/
+│   │   ├── redeem.service.ts
+│   │   ├── signup.service.ts
+│   │   └── inheritance.service.ts
+│   ├── leads/
+│   │   ├── ingest.service.ts
+│   │   ├── classify.service.ts
+│   │   ├── draft.service.ts
+│   │   ├── approve.service.ts
+│   │   └── scoring.service.ts
+│   ├── ledger/
+│   │   └── ledger.service.ts
+│   ├── pricing/
+│   │   └── pricing.service.ts
+│   ├── analytics/
+│   │   └── analytics.service.ts
+│   ├── admin/
+│   │   └── admin.service.ts
+│   └── moltis/
+│       ├── moltis-client.ts
+│       ├── moltis-adapter.service.ts
+│       ├── prompt-pack.ts
+│       └── tools/
+│           ├── classify.tool.ts
+│           ├── draft.tool.ts
+│           └── icp.tool.ts
+│
+├── workers/
+│   ├── index.ts
+│   ├── scheduler.ts
+│   ├── jobs/
+│   │   ├── activate-queued-slots.job.ts
+│   │   ├── expire-slots.job.ts
+│   │   ├── ingest-leads.job.ts
+│   │   ├── classify-leads.job.ts
+│   │   ├── draft-comments.job.ts
+│   │   ├── rollup-metrics.job.ts
+│   │   └── reset-daily-cap.job.ts
+│   └── queues/
+│       ├── queue-names.ts
+│       ├── lead.queue.ts
+│       ├── rotator.queue.ts
+│       └── metrics.queue.ts
+│
+├── scripts/
+│   ├── dev.ts
+│   ├── start-moltis.ts
+│   ├── start-worker.ts
+│   ├── bootstrap.ts
+│   └── test-redirect.ts
+│
+├── public/
+│   ├── logo.svg
+│   └── images/
+│
+├── .env
+├── .env.example
+├── .gitignore
+├── .replit
+├── replit.nix
+├── next.config.mjs
+├── package.json
+├── tsconfig.json
+└── README.md

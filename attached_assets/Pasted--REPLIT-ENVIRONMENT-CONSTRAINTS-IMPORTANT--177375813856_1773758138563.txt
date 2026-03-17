@@ -1,0 +1,83 @@
+==================================================
+REPLIT ENVIRONMENT CONSTRAINTS (IMPORTANT)
+==================================================
+
+This MVP will be built and deployed inside Replit.
+
+Design the architecture accordingly:
+
+1. SINGLE ENVIRONMENT
+- assume one runtime environment
+- avoid multi-service distributed architecture
+- Next.js app, worker logic, and Moltis integration must coexist in the same project
+
+2. DATABASE
+- use hosted Postgres (Neon, Supabase, or equivalent)
+- do NOT assume local Postgres
+
+3. REDIS / QUEUES
+- use Upstash Redis or equivalent hosted Redis
+- queues must be simple and reliable
+- avoid complex distributed queue systems
+
+4. BACKGROUND JOBS
+- implement a lightweight internal worker loop
+- or a single worker process in the same environment
+- handle:
+  - slot expiration
+  - slot activation
+  - Ralph-loop batching
+  - Moltis job dispatch
+
+5. MOLTIS RUNTIME
+- run Moltis as a local process inside the same environment
+- communicate via localhost (JSON-RPC or HTTP)
+- design a Moltis adapter service that:
+  - sends jobs to Moltis
+  - receives structured responses
+  - handles retries and failures
+
+6. SCHEDULING
+- do NOT rely on external cron infrastructure
+- use:
+  - internal interval loop
+  - or lightweight scheduler inside the app
+
+7. SECRETS
+- assume Replit environment variables
+- keep API keys scoped and minimal
+
+8. SIMPLICITY BIAS
+- prioritize:
+  - single-process simplicity
+  - minimal infra dependencies
+  - fast iteration
+  - easy debugging
+
+This MVP must be runnable entirely from a single Replit workspace.
+
+==================================================
+DEPLOYMENT GOAL
+==================================================
+
+The system should:
+- run in one Replit project
+- start with a single command
+- spin up:
+  - Next.js app
+  - worker loop
+  - Moltis runtime (child process or side process)
+- connect to:
+  - hosted Postgres
+  - hosted Redis
+
+==================================================
+ENGINEERING BIAS (UPDATED)
+==================================================
+
+When uncertain, choose:
+- single-process over distributed systems
+- simple loops over complex schedulers
+- hosted services over local infra
+- clarity over abstraction
+- fast iteration over theoretical scalability
