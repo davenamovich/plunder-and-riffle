@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -7,9 +7,6 @@ import {
   useGetMyOffers,
   useListOffers,
   useSignupForOffer,
-  useGetMyKeywords,
-  useUpdateMyKeywords,
-  useBuildIcp,
   useGetMyReferral,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
   Activity, Clock, Plus, Copy, Link as LinkIcon,
-  RefreshCw, CheckCircle2, Tag, Zap, ArrowRight,
+  RefreshCw, CheckCircle2, ArrowRight,
   Users, Coins, ExternalLink
 } from "lucide-react";
 import { formatDistanceToNow, isPast } from "date-fns";
@@ -37,7 +34,6 @@ export default function Dashboard() {
   const { data: slotsRes, refetch: refetchSlots, isLoading: isSlotsLoading } = useGetMyRotatorSlots({ query: { enabled } });
   const { data: myOffersRes, refetch: refetchMyOffers } = useGetMyOffers({ query: { enabled } });
   const { data: offersListRes } = useListOffers({ query: { enabled } });
-  const { data: keywordsRes, refetch: refetchKeywords } = useGetMyKeywords({ query: { enabled } });
   const { data: refRes } = useGetMyReferral({ query: { enabled } });
 
   const { mutate: signupOffer, isPending: isSigningUp } = useSignupForOffer({
@@ -51,30 +47,6 @@ export default function Dashboard() {
         toast({ title: "Error", description: e?.error || "Failed to sign up", variant: "destructive" }),
     },
   });
-
-  const { mutate: updateKeywords, isPending: isUpdatingKw } = useUpdateMyKeywords({
-    mutation: {
-      onSuccess: () => { toast({ title: "Keywords saved" }); refetchKeywords(); },
-    },
-  });
-
-  const { mutate: buildIcp, isPending: isBuildingIcp } = useBuildIcp({
-    mutation: {
-      onSuccess: (data) => {
-        setKwInput(data.keywords.join(", "));
-        toast({ title: "ICP generated", description: "Keywords populated from your offer URL." });
-      },
-      onError: (e: any) =>
-        toast({ title: "Error", description: e?.error || "Failed to generate ICP", variant: "destructive" }),
-    },
-  });
-
-  const [icpUrl, setIcpUrl] = useState("");
-  const [kwInput, setKwInput] = useState("");
-
-  React.useEffect(() => {
-    if (keywordsRes) setKwInput(keywordsRes.keywords.join(", "));
-  }, [keywordsRes]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -202,10 +174,9 @@ export default function Dashboard() {
       {/* Tabs */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
         <Tabs defaultValue="slots">
-          <TabsList className="grid w-full grid-cols-4 h-11 mb-6">
+          <TabsList className="grid w-full grid-cols-3 h-11 mb-6">
             <TabsTrigger value="slots">Rotator Slots</TabsTrigger>
             <TabsTrigger value="offers">Offers</TabsTrigger>
-            <TabsTrigger value="keywords">Keywords</TabsTrigger>
             <TabsTrigger value="referrals">Referrals</TabsTrigger>
           </TabsList>
 
@@ -344,77 +315,6 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
             </div>
-          </TabsContent>
-
-          {/* Keywords Tab */}
-          <TabsContent value="keywords" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Tag className="w-5 h-5 text-primary" /> ICP & Keyword Targeting
-                </CardTitle>
-                <CardDescription>Help the agent find better leads by defining your ideal customer profile.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
-                        <Zap className="w-4 h-4 text-primary" /> Auto-Build from URL
-                      </h4>
-                      <p className="text-xs text-muted-foreground mb-3">
-                        Paste your offer or landing page URL and our AI will extract the best targeting keywords.
-                      </p>
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="https://your-offer.com"
-                          value={icpUrl}
-                          onChange={(e) => setIcpUrl(e.target.value)}
-                        />
-                        <Button
-                          disabled={!icpUrl || isBuildingIcp}
-                          onClick={() => buildIcp({ data: { offerUrl: icpUrl } })}
-                          className="shrink-0"
-                        >
-                          {isBuildingIcp ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Extract"}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
-                        <Tag className="w-4 h-4" /> Target Keywords
-                      </h4>
-                      <p className="text-xs text-muted-foreground mb-3">Comma-separated keywords and topics.</p>
-                      <textarea
-                        className="w-full h-28 rounded-lg border border-border bg-background p-3 text-sm focus:ring-2 focus:ring-primary/50 focus:outline-none resize-none"
-                        value={kwInput}
-                        onChange={(e) => setKwInput(e.target.value)}
-                        placeholder="bitcoin, crypto, passive income, web3..."
-                      />
-                      <Button
-                        className="w-full mt-2"
-                        disabled={isUpdatingKw}
-                        onClick={() =>
-                          updateKeywords({
-                            data: {
-                              keywords: kwInput.split(",").map((s) => s.trim()).filter(Boolean),
-                              painPoints: [],
-                              buyerIntentPhrases: [],
-                            },
-                          })
-                        }
-                      >
-                        {isUpdatingKw ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : null}
-                        Save Keywords
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           {/* Referrals Tab */}

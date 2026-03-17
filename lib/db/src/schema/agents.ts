@@ -38,6 +38,9 @@ export const agentsTable = pgTable("agents", {
   icpContext: text("icp_context"),
   // Post templates for this agent (JSON array of strings)
   postTemplates: text("post_templates"),
+  // Farcaster social identity
+  farcasterFid: text("farcaster_fid"),
+  farcasterHandle: text("farcaster_handle"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -45,3 +48,21 @@ export const agentsTable = pgTable("agents", {
 export const insertAgentSchema = createInsertSchema(agentsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertAgent = z.infer<typeof insertAgentSchema>;
 export type Agent = typeof agentsTable.$inferSelect;
+
+// ─── Agent ↔ Offer rotation junction ─────────────────────────────────────────
+
+import { offersTable } from "./offers";
+
+export const agentOffersTable = pgTable("agent_offers", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  agentId: text("agent_id").notNull().references(() => agentsTable.id, { onDelete: "cascade" }),
+  offerId: text("offer_id").notNull().references(() => offersTable.id, { onDelete: "cascade" }),
+  weight: integer("weight").notNull().default(1),
+  sortOrder: integer("sort_order").notNull().default(0),
+  clickCount: integer("click_count").notNull().default(0),
+  conversionCount: integer("conversion_count").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type AgentOffer = typeof agentOffersTable.$inferSelect;
