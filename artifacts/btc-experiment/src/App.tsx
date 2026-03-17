@@ -39,7 +39,6 @@ function App() {
         appearance: {
           theme: "dark",
           accentColor: "#f7931a",
-          logo: "",
         },
         embeddedWallets: {
           createOnLogin: "off",
