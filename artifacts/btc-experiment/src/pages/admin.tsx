@@ -33,15 +33,78 @@ import { formatDistanceToNow } from "date-fns";
 
 function LeadStatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    raw:               "secondary",
-    scored:            "outline",
-    pending_approval:  "default",
-    approved:          "success",
-    posted:            "success",
-    rejected:          "destructive",
-    rejected_low_score:"destructive",
+    raw:                "secondary",
+    scored:             "outline",
+    pending_approval:   "default",
+    approved:           "success",
+    posted:             "success",
+    rejected:           "destructive",
+    rejected_low_score: "destructive",
   };
   return <Badge variant={(map[status] || "secondary") as any}>{status.replace(/_/g, " ")}</Badge>;
+}
+
+// ─── Reply style badge ─────────────────────────────────────────────────────────
+
+function ReplyStyleBadge({ style }: { style?: string }) {
+  if (!style) return null;
+  const cfg: Record<string, { label: string; className: string }> = {
+    helpful:        { label: "helpful",        className: "bg-blue-500/15 text-blue-400 border-blue-500/30" },
+    curiosity:      { label: "curiosity",      className: "bg-violet-500/15 text-violet-400 border-violet-500/30" },
+    ask_permission: { label: "ask permission", className: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
+    soft_cta:       { label: "soft cta",       className: "bg-green-500/15 text-green-400 border-green-500/30" },
+  };
+  const c = cfg[style] ?? { label: style, className: "bg-muted text-muted-foreground border-border" };
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${c.className}`}>
+      {c.label}
+    </span>
+  );
+}
+
+// ─── Score dimension mini-bar ──────────────────────────────────────────────────
+
+function DimBar({ label, value, invert = false }: { label: string; value: number; invert?: boolean }) {
+  const pct = (value / 10) * 100;
+  const color = invert
+    ? value <= 3 ? "bg-green-500" : value <= 6 ? "bg-amber-500" : "bg-red-500"
+    : value >= 7 ? "bg-green-500" : value >= 4 ? "bg-amber-500" : "bg-muted-foreground/40";
+
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="text-[10px] text-muted-foreground w-28 shrink-0 truncate">{label}</span>
+      <div className="flex-1 bg-muted/40 rounded-full h-1.5 overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-[10px] font-mono text-muted-foreground w-4 text-right shrink-0">{value}</span>
+    </div>
+  );
+}
+
+// ─── Score dimensions panel ────────────────────────────────────────────────────
+
+function ScoreDimensionsPanel({ dims, reason }: { dims?: any; reason?: string }) {
+  if (!dims && !reason) return null;
+  return (
+    <div className="mt-3 p-3 rounded-lg bg-muted/20 border border-border/30">
+      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Signal Breakdown</p>
+      {dims ? (
+        <div className="space-y-1.5">
+          <DimBar label="Niche match"        value={dims.niche_match} />
+          <DimBar label="Buyer intent"       value={dims.buyer_intent} />
+          <DimBar label="Urgency"            value={dims.urgency} />
+          <DimBar label="Lead value"         value={dims.likely_lead_value} />
+          <DimBar label="Response likelihood" value={dims.response_likelihood} />
+          <DimBar label="Spam risk"          value={dims.spam_risk} invert />
+        </div>
+      ) : reason ? (
+        <p className="text-xs text-muted-foreground italic">{reason}</p>
+      ) : null}
+      {dims && reason && (
+        <p className="text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border/20 italic">{reason}</p>
+      )}
+    </div>
+  );
 }
 
 // ─── Expand / collapse lead row ────────────────────────────────────────────────
@@ -59,9 +122,12 @@ function LeadRow({ lead, onApprove, onReject }: {
       <TableRow className="cursor-pointer hover:bg-muted/30" onClick={() => setExpanded(v => !v)}>
         <TableCell className="font-medium capitalize">{lead.source}</TableCell>
         <TableCell>
-          <span className={`font-mono font-bold ${Number(lead.score) >= 0.65 ? "text-primary" : Number(lead.score) >= 0.35 ? "text-amber-400" : "text-muted-foreground"}`}>
-            {score}
-          </span>
+          <div className="flex flex-col gap-1">
+            <span className={`font-mono font-bold ${Number(lead.score) >= 0.65 ? "text-primary" : Number(lead.score) >= 0.35 ? "text-amber-400" : "text-muted-foreground"}`}>
+              {score}
+            </span>
+            <ReplyStyleBadge style={lead.replyStyle} />
+          </div>
         </TableCell>
         <TableCell className="max-w-xs">
           <p className="truncate text-xs text-muted-foreground">{lead.content?.slice(0, 80)}…</p>
@@ -91,31 +157,53 @@ function LeadRow({ lead, onApprove, onReject }: {
         <TableRow>
           <TableCell colSpan={6} className="bg-muted/10 p-4">
             <div className="grid md:grid-cols-2 gap-4">
+              {/* Left: original post + scoring */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-1"><Eye className="w-3 h-3" /> Original Post</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-1">
+                  <Eye className="w-3 h-3" /> Original Post
+                </p>
                 <p className="text-sm bg-background/50 p-3 rounded-lg border border-border/40 leading-relaxed">{lead.content}</p>
                 {lead.postUrl && (
                   <a href={lead.postUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline mt-1 block">
                     View original →
                   </a>
                 )}
-                {lead.scoreReason && (
-                  <p className="text-xs text-muted-foreground mt-2 italic">
-                    <span className="font-medium not-italic">Score reason:</span> {lead.scoreReason}
-                  </p>
-                )}
+                <ScoreDimensionsPanel dims={lead.scoreDetails} reason={lead.scoreReason} />
               </div>
+
+              {/* Right: AI draft + meta */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-1"><Bot className="w-3 h-3" /> AI Draft Reply</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
+                    <Bot className="w-3 h-3" /> AI Draft Reply
+                  </p>
+                  {lead.replyStyle && (
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      style: <ReplyStyleBadge style={lead.replyStyle} />
+                    </div>
+                  )}
+                </div>
                 {lead.draft ? (
                   <p className="text-sm bg-primary/5 border border-primary/20 p-3 rounded-lg leading-relaxed">{lead.draft}</p>
                 ) : (
-                  <p className="text-sm text-muted-foreground italic p-3">Draft not yet generated.</p>
+                  <p className="text-sm text-muted-foreground italic p-3 bg-muted/20 rounded-lg border border-border/20">
+                    Draft not yet generated.
+                  </p>
                 )}
-                <p className="text-xs text-muted-foreground mt-2">
+                <p className="text-xs text-muted-foreground mt-3">
                   Author: <span className="font-mono">{lead.authorHandle || "unknown"}</span>
-                  {lead.createdAt && <span className="ml-2">· {formatDistanceToNow(new Date(lead.createdAt), { addSuffix: true })}</span>}
+                  {lead.createdAt && (
+                    <span className="ml-2">· {formatDistanceToNow(new Date(lead.createdAt), { addSuffix: true })}</span>
+                  )}
+                  {lead.externalId && (
+                    <span className="ml-2 opacity-50">· {lead.externalId}</span>
+                  )}
                 </p>
+                {lead.rejectedReason && (
+                  <p className="text-xs text-destructive/70 mt-2 italic">
+                    Rejected: {lead.rejectedReason}
+                  </p>
+                )}
               </div>
             </div>
           </TableCell>
