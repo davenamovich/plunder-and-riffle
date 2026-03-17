@@ -111,6 +111,27 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* CTA Section */}
+      <section className="py-24 relative overflow-hidden">
+        <div className="absolute inset-0 bg-primary/5" />
+        <div className="container relative z-10 mx-auto px-4 text-center">
+          <ShieldCheck className="w-16 h-16 mx-auto text-primary mb-6" />
+          <h2 className="text-3xl md:text-5xl font-bold mb-6">Ready to see the proof?</h2>
+          <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
+            No credit card required to start. Just an email to secure your free 24-hour rotator spot.
+          </p>
+          {isAuthenticated ? (
+            <Link href="/dashboard">
+              <Button size="lg" className="text-lg px-10 h-14">Go to Dashboard</Button>
+            </Link>
+          ) : (
+            <Button size="lg" className="text-lg px-10 h-14" onClick={openLoginModal}>
+              Claim Free Spot Now
+            </Button>
+          )}
+        </div>
+      </section>
+
       {/* How it Works */}
       <section className="py-24 bg-card/50 relative">
         <div className="container mx-auto px-4">
@@ -149,27 +170,6 @@ export default function Landing() {
               </p>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-24 relative overflow-hidden">
-        <div className="absolute inset-0 bg-primary/5" />
-        <div className="container relative z-10 mx-auto px-4 text-center">
-          <ShieldCheck className="w-16 h-16 mx-auto text-primary mb-6" />
-          <h2 className="text-3xl md:text-5xl font-bold mb-6">Ready to see the proof?</h2>
-          <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-            No credit card required to start. Just an email to secure your free 24-hour rotator spot.
-          </p>
-          {isAuthenticated ? (
-            <Link href="/dashboard">
-              <Button size="lg" className="text-lg px-10 h-14">Go to Dashboard</Button>
-            </Link>
-          ) : (
-            <Button size="lg" className="text-lg px-10 h-14" onClick={openLoginModal}>
-              Claim Free Spot Now
-            </Button>
-          )}
         </div>
       </section>
     </div>
