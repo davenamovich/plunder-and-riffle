@@ -3,10 +3,9 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard, LogOut, Activity, ExternalLink } from "lucide-react";
-import { AuthModal } from "./auth-modal";
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, user, openLoginModal, logout } = useAuth();
+  const { isAuthenticated, user, login, logout } = useAuth();
   const [location] = useLocation();
 
   return (
@@ -23,10 +22,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Link>
 
           <nav className="flex items-center space-x-2 md:space-x-4">
-            <Link href="/agent/main-agent" className={`text-sm font-medium transition-colors hover:text-primary ${location.startsWith('/agent') ? 'text-primary' : 'text-muted-foreground'}`}>
+            <Link href="/agent/ralph" className={`text-sm font-medium transition-colors hover:text-primary ${location.startsWith('/agent') ? 'text-primary' : 'text-muted-foreground'}`}>
               The Agent
             </Link>
-            
+
             {isAuthenticated ? (
               <>
                 <Link href="/dashboard">
@@ -56,7 +55,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </div>
               </>
             ) : (
-              <Button size="sm" onClick={openLoginModal}>
+              <Button size="sm" onClick={login}>
                 Join Now
               </Button>
             )}
@@ -85,8 +84,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </footer>
-
-      <AuthModal />
     </div>
   );
 }

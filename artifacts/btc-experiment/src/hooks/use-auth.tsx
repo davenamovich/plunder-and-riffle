@@ -1,63 +1,91 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { useGetMe } from "@workspace/api-client-react";
-import type { UserProfile } from "@workspace/api-client-react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import { usePrivy } from "@privy-io/react-auth";
+
+export interface PlatformUser {
+  id: string;
+  email: string;
+  slug: string;
+  displayName: string;
+  role: string;
+  createdAt: string;
+  referralCode: string;
+}
 
 interface AuthContextType {
-  user: UserProfile | null;
+  user: PlatformUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   token: string | null;
   setToken: (token: string | null) => void;
-  isLoginModalOpen: boolean;
-  openLoginModal: () => void;
-  closeLoginModal: () => void;
+  login: () => void;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const { ready, authenticated, user: privyUser, login: privyLogin, logout: privyLogout } = usePrivy();
   const [token, setTokenState] = useState<string | null>(() => localStorage.getItem("token"));
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [platformUser, setPlatformUser] = useState<PlatformUser | null>(null);
+  const [isExchanging, setIsExchanging] = useState(false);
+  const exchangedRef = useRef<string | null>(null);
 
-  const setToken = (newToken: string | null) => {
-    if (newToken) {
-      localStorage.setItem("token", newToken);
-    } else {
-      localStorage.removeItem("token");
-    }
+  const setToken = useCallback((newToken: string | null) => {
+    if (newToken) localStorage.setItem("token", newToken);
+    else localStorage.removeItem("token");
     setTokenState(newToken);
-  };
+  }, []);
 
-  const { data: user, isLoading, refetch } = useGetMe({
-    query: {
-      enabled: !!token,
-      retry: false,
-    },
-    // Attempt to pass headers if customFetch supports it
-    request: {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    } as any,
-  });
+  useEffect(() => {
+    if (!ready || !authenticated || !privyUser) return;
+    const email = privyUser.email?.address;
+    if (!email) return;
+    if (exchangedRef.current === email) return;
+    exchangedRef.current = email;
+    setIsExchanging(true);
+    fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.token) setToken(data.token);
+        if (data.user) setPlatformUser(data.user);
+      })
+      .catch(console.error)
+      .finally(() => setIsExchanging(false));
+  }, [ready, authenticated, privyUser, setToken]);
 
-  // If query fails (e.g. 401), we might want to clear token. 
-  // We'll rely on the app logic to clear it if needed.
+  useEffect(() => {
+    if (!token || platformUser || isExchanging) return;
+    fetch("/api/auth/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) setPlatformUser(data);
+        else setToken(null);
+      })
+      .catch(() => setToken(null));
+  }, [token, platformUser, isExchanging, setToken]);
 
-  const logout = () => {
+  const logout = useCallback(async () => {
     setToken(null);
-  };
+    setPlatformUser(null);
+    exchangedRef.current = null;
+    try { await privyLogout(); } catch {}
+  }, [privyLogout, setToken]);
 
   return (
     <AuthContext.Provider
       value={{
-        user: user || null,
-        isLoading,
-        isAuthenticated: !!user && !!token,
+        user: platformUser,
+        isLoading: !ready || isExchanging,
+        isAuthenticated: !!token && !!platformUser,
         token,
         setToken,
-        isLoginModalOpen,
-        openLoginModal: () => setIsLoginModalOpen(true),
-        closeLoginModal: () => setIsLoginModalOpen(false),
+        login: privyLogin,
         logout,
       }}
     >
@@ -68,8 +96,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
+  if (context === undefined) throw new Error("useAuth must be used within an AuthProvider");
   return context;
 }

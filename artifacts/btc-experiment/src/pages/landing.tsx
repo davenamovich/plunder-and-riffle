@@ -1,28 +1,16 @@
-import React, { useState } from "react";
+import React from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
-import { useGetAgentStats, useLogin } from "@workspace/api-client-react";
-import { ArrowRight, Bot, Zap, Coins, Users, ShieldCheck, Loader2 } from "lucide-react";
+import { useGetAgentStats } from "@workspace/api-client-react";
+import { ArrowRight, Bot, Zap, Coins, Users, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Landing() {
-  const { isAuthenticated, setToken } = useAuth();
-  const [email, setEmail] = useState("");
-  const [referralCode, setReferralCode] = useState("");
-  const [showReferral, setShowReferral] = useState(false);
+  const { isAuthenticated, login } = useAuth();
 
   const { data: stats } = useGetAgentStats("ralph", {
     query: { retry: false, refetchInterval: 30000 }
-  });
-
-  const { mutate: login, isPending, isSuccess } = useLogin({
-    mutation: {
-      onSuccess: (data) => {
-        setToken(data.token);
-      },
-    },
   });
 
   return (
@@ -88,58 +76,20 @@ export default function Landing() {
                   </Button>
                 </Link>
               </div>
-            ) : isSuccess ? (
-              <div className="glass-panel rounded-2xl px-6 py-5 text-center border border-primary/30">
-                <p className="text-primary font-semibold text-lg">You're in! 🎉</p>
-                <p className="text-muted-foreground text-sm mt-1">Your free 24-hour rotator spot is being activated.</p>
-                <Link href="/dashboard">
-                  <Button className="mt-4 w-full" size="lg">Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" /></Button>
-                </Link>
-              </div>
             ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (email) login({ data: { email, referralCode: referralCode || undefined } });
-                }}
-                className="space-y-3"
-              >
-                <div className="flex gap-2">
-                  <Input
-                    type="email"
-                    placeholder="your@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="h-14 text-base bg-background/60 border-border/60 backdrop-blur-sm flex-1"
-                  />
-                  <Button type="submit" size="lg" className="h-14 px-6 shrink-0" disabled={isPending}>
-                    {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <><span className="hidden sm:inline">Get My Free Spot</span><ArrowRight className="h-5 w-5 sm:ml-2" /></>}
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <Button size="lg" className="h-14 px-8 text-lg" onClick={login}>
+                    Get My Free Spot <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
-                </div>
-                <div className="flex items-center justify-between">
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground hover:text-primary transition-colors"
-                    onClick={() => setShowReferral(!showReferral)}
-                  >
-                    {showReferral ? "Hide referral code" : "Have a referral code?"}
-                  </button>
                   <Link href="/agent/ralph">
-                    <span className="text-xs text-muted-foreground hover:text-primary transition-colors cursor-pointer">Watch the Agent →</span>
+                    <Button variant="outline" size="lg" className="h-14 px-8 text-lg glass-panel w-full sm:w-auto">
+                      Watch the Agent
+                    </Button>
                   </Link>
                 </div>
-                {showReferral && (
-                  <Input
-                    type="text"
-                    placeholder="Referral code (e.g. RALPH-123)"
-                    value={referralCode}
-                    onChange={(e) => setReferralCode(e.target.value)}
-                    className="h-11 text-sm bg-background/60 border-border/60 backdrop-blur-sm"
-                  />
-                )}
-                <p className="text-xs text-muted-foreground text-center">No credit card. No password. Just your email.</p>
-              </form>
+                <p className="text-xs text-muted-foreground text-center pt-1">No credit card. No password. Just your email.</p>
+              </div>
             )}
           </motion.div>
 

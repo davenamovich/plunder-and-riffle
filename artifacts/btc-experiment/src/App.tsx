@@ -2,6 +2,7 @@ import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { PrivyProvider } from "@privy-io/react-auth";
 import { AuthProvider } from "@/hooks/use-auth";
 import { Layout } from "@/components/layout";
 
@@ -28,19 +29,36 @@ function Router() {
 }
 
 function App() {
+  const privyAppId = import.meta.env.VITE_PRIVY_APP_ID as string;
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Layout>
-              <Router />
-            </Layout>
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <PrivyProvider
+      appId={privyAppId}
+      config={{
+        loginMethods: ["email", "google"],
+        appearance: {
+          theme: "dark",
+          accentColor: "#f7931a",
+          logo: "",
+        },
+        embeddedWallets: {
+          createOnLogin: "off",
+        },
+      }}
+    >
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <Layout>
+                <Router />
+              </Layout>
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </PrivyProvider>
   );
 }
 
