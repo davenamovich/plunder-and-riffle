@@ -277,22 +277,6 @@ export default function Admin() {
   const { data: dmQueueData, refetch: refetchDmQueue } = useGetDmQueue(dmQueueFilter);
   const { data: seqData, refetch: refetchSeqs } = useGetDmSequences();
 
-  // Wait for auth to finish loading before deciding to redirect
-  if (isLoading || (token && !user)) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm">Loading…</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated || user?.role !== "admin") {
-    return <Redirect to="/" />;
-  }
-
   // ── Mutation hooks ──
   const { mutate: updateSettings, isPending: isSavingSettings } = useUpdateAdminSettings({
     mutation: { onSuccess: () => { toast({ title: "Settings saved" }); refetchSettings(); } },
@@ -373,6 +357,22 @@ export default function Admin() {
 
   const [localSettings, setLocalSettings] = React.useState<any>({});
   React.useEffect(() => { if (settings) setLocalSettings(settings); }, [settings]);
+
+  // Wait for auth to finish loading before deciding to redirect
+  if (isLoading || (token && !user)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm">Loading…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || user?.role !== "admin") {
+    return <Redirect to="/" />;
+  }
 
   // ── Leads ──
   const allLeads = leadsRes?.leads || [];

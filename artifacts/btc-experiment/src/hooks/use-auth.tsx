@@ -28,7 +28,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setTokenState] = useState<string | null>(() => localStorage.getItem("token"));
   const [platformUser, setPlatformUser] = useState<PlatformUser | null>(null);
   const [isExchanging, setIsExchanging] = useState(false);
+  const [privyTimedOut, setPrivyTimedOut] = useState(false);
   const exchangedRef = useRef<string | null>(null);
+
+  // If Privy doesn't initialize within 4 seconds (e.g. domain not whitelisted),
+  // stop blocking and fall back to JWT-only auth.
+  useEffect(() => {
+    if (ready) return;
+    const id = setTimeout(() => setPrivyTimedOut(true), 4000);
+    return () => clearTimeout(id);
+  }, [ready]);
 
   const setToken = useCallback((newToken: string | null) => {
     if (newToken) localStorage.setItem("token", newToken);
@@ -93,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         user: platformUser,
-        isLoading: !ready || isExchanging,
+        isLoading: (!ready && !privyTimedOut && !platformUser) || isExchanging,
         isAuthenticated: !!token && !!platformUser,
         token,
         setToken,
