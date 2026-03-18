@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable, personalRotatorLinksTable } from "@workspace/db/schema";
 import { eq, and, gt, count } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
+import { createAgentWallet, isCDPConfigured } from "../lib/cdp.js";
 import { moltisStatusWithUsage, getDailyUsage } from "../lib/moltis.js";
 import { runRalphLoop, approveLead, rejectLead as ralphRejectLead, markLeadPosted } from "../lib/ralph.js";
 import { getFunnelSummary, getRecentEvents } from "../lib/funnel.js";
@@ -388,6 +389,9 @@ router.get("/admin/agents-fleet", requireAdmin, async (req, res) => {
       ]);
       return {
         id: agent.id, slug: agent.slug, name: agent.name, description: agent.description,
+        persona: agent.persona, avatarUrl: agent.avatarUrl,
+        twitterHandle: agent.twitterHandle, linkedinUrl: agent.linkedinUrl,
+        composioEntityId: agent.composioEntityId, icpContext: agent.icpContext,
         isActive: agent.isActive, isPaused: agent.isPaused,
         freeSlotCapacity: agent.freeSlotCapacity, paidSlotCapacity: agent.paidSlotCapacity,
         activeFreeSlots: freeSlots, activePaidSlots: paidSlots,
@@ -396,6 +400,9 @@ router.get("/admin/agents-fleet", requireAdmin, async (req, res) => {
         paidSlotPrice: agent.paidSlotPrice, slotDurationHours: agent.slotDurationHours,
         leadApprovalMode: agent.leadApprovalMode, offerUrl: agent.offerUrl,
         fallbackUrl: agent.fallbackUrl, createdAt: agent.createdAt,
+        nftMintEnabled: agent.nftMintEnabled, nftMintedAt: agent.nftMintedAt, nftTokenId: agent.nftTokenId,
+        cdpWalletId: agent.cdpWalletId, cdpWalletAddress: agent.cdpWalletAddress,
+        cdpWalletNetwork: agent.cdpWalletNetwork, cdpWalletCreatedAt: agent.cdpWalletCreatedAt,
       };
     }));
     res.json({ agents: enriched });
@@ -521,6 +528,64 @@ router.post("/admin/wallets/sweep", requireAdmin, async (req, res) => {
         ? `Sweep initiated for ${ids.length} wallet(s). Wire Privy server wallet API to execute.`
         : "No wallet IDs provided.",
     });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── CDP Wallet — status + create ─────────────────────────────────────────────
+
+router.get("/admin/cdp/status", requireAdmin, async (_req, res) => {
+  res.json({ configured: isCDPConfigured() });
+});
+
+router.post("/admin/agents/:id/cdp-wallet", requireAdmin, async (req, res) => {
+  try {
+    const agent = await db.select().from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+    if (agent.cdpWalletId) {
+      res.status(409).json({ error: "Agent already has a CDP wallet", walletId: agent.cdpWalletId, address: agent.cdpWalletAddress });
+      return;
+    }
+    if (!isCDPConfigured()) {
+      res.status(503).json({ error: "CDP credentials not configured on server" });
+      return;
+    }
+
+    const network = (req.body?.network as string) || "base-mainnet";
+    console.log(`[cdp] creating wallet for agent ${agent.slug} on ${network}…`);
+    const wallet = await createAgentWallet(network);
+
+    const [updated] = await db.update(agentsTable).set({
+      cdpWalletId: wallet.walletId,
+      cdpWalletAddress: wallet.address,
+      cdpWalletNetwork: wallet.network,
+      cdpWalletSeed: wallet.seed,
+      cdpWalletCreatedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(agentsTable.id, req.params.id)).returning();
+
+    console.log(`[cdp] wallet created for ${agent.slug}: ${wallet.address}`);
+    res.json({
+      success: true,
+      walletId: updated.cdpWalletId,
+      address: updated.cdpWalletAddress,
+      network: updated.cdpWalletNetwork,
+      createdAt: updated.cdpWalletCreatedAt,
+    });
+  } catch (err: any) {
+    console.error("[cdp] wallet creation error:", err);
+    res.status(500).json({ error: err?.message ?? "Failed to create CDP wallet" });
+  }
+});
+
+router.delete("/admin/agents/:id/cdp-wallet", requireAdmin, async (req, res) => {
+  try {
+    const agent = await db.select().from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+    await db.update(agentsTable).set({
+      cdpWalletId: null, cdpWalletAddress: null, cdpWalletNetwork: "base-mainnet",
+      cdpWalletSeed: null, cdpWalletCreatedAt: null, updatedAt: new Date(),
+    }).where(eq(agentsTable.id, req.params.id));
+    res.json({ success: true, message: "CDP wallet record cleared (on-chain wallet still exists)" });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 

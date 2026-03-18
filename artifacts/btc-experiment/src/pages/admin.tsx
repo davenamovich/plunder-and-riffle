@@ -1205,6 +1205,21 @@ function AgentsFleetTab({ token }: { token: string | null }) {
     },
   });
 
+  const createCDPWallet = useMutation({
+    mutationFn: ({ id, network }: { id: string; network?: string }) =>
+      fetch(`/api/admin/agents/${id}/cdp-wallet`, { method: "POST", headers, body: JSON.stringify({ network: network ?? "base-mainnet" }) }).then(r => r.json()),
+    onSuccess: (res: any) => {
+      if (res.error) { toast({ title: "CDP Error", description: res.error, variant: "destructive" }); return; }
+      toast({ title: "CDP Wallet Created", description: res.address });
+      qc.invalidateQueries({ queryKey: ["admin-fleet"] });
+    },
+  });
+
+  const deleteCDPWallet = useMutation({
+    mutationFn: (id: string) => fetch(`/api/admin/agents/${id}/cdp-wallet`, { method: "DELETE", headers }).then(r => r.json()),
+    onSuccess: () => { toast({ title: "CDP wallet record cleared" }); qc.invalidateQueries({ queryKey: ["admin-fleet"] }); },
+  });
+
   const agents: any[] = data?.agents ?? [];
 
   return (
@@ -1342,6 +1357,57 @@ function AgentsFleetTab({ token }: { token: string | null }) {
                           <div className="md:col-span-3"><p className="text-muted-foreground mb-0.5">ICP Context (JSON)</p><p className="font-mono bg-muted/20 p-2 rounded text-[10px] max-h-20 overflow-auto">{agent.icpContext || "—"}</p></div>
                           {agent.nftMintEnabled && <div className="md:col-span-3"><p className="text-muted-foreground mb-0.5">NFT Token ID</p><p className="font-mono text-violet-400">{agent.nftTokenId || "—"}</p></div>}
                         </div>
+
+                        {/* CDP Wallet section */}
+                        <div className="rounded-lg border border-border/40 bg-muted/10 p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Wallet className="w-3.5 h-3.5 text-primary" />
+                              <span className="text-xs font-medium">CDP Wallet</span>
+                              {agent.cdpWalletAddress
+                                ? <Badge className="text-xs bg-green-500/15 text-green-400 border border-green-500/30">Active</Badge>
+                                : <Badge variant="outline" className="text-xs text-muted-foreground">Not provisioned</Badge>}
+                            </div>
+                            {agent.cdpWalletAddress ? (
+                              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-destructive hover:text-destructive"
+                                onClick={() => { if (confirm("Clear CDP wallet record? (On-chain wallet still exists)")) deleteCDPWallet.mutate(agent.id); }}
+                                disabled={deleteCDPWallet.isPending}>
+                                <Trash2 className="w-3 h-3 mr-1" /> Clear
+                              </Button>
+                            ) : (
+                              <Button size="sm" className="h-6 px-2 text-xs"
+                                onClick={() => createCDPWallet.mutate({ id: agent.id, network: "base-mainnet" })}
+                                disabled={createCDPWallet.isPending}>
+                                {createCDPWallet.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Plus className="w-3 h-3 mr-1" />}
+                                Create Wallet
+                              </Button>
+                            )}
+                          </div>
+                          {agent.cdpWalletAddress && (
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <p className="text-muted-foreground mb-0.5">Address</p>
+                                <p className="font-mono text-primary flex items-center gap-1">
+                                  {agent.cdpWalletAddress.slice(0, 10)}…{agent.cdpWalletAddress.slice(-6)}
+                                  <button onClick={() => navigator.clipboard.writeText(agent.cdpWalletAddress)} title="Copy" className="text-muted-foreground hover:text-foreground">
+                                    <Copy className="w-2.5 h-2.5" />
+                                  </button>
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground mb-0.5">Network</p>
+                                <p>{agent.cdpWalletNetwork ?? "base-mainnet"}</p>
+                              </div>
+                              {agent.cdpWalletId && (
+                                <div className="col-span-2">
+                                  <p className="text-muted-foreground mb-0.5">Wallet ID</p>
+                                  <p className="font-mono text-[10px] text-muted-foreground">{agent.cdpWalletId}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
                         <Button size="sm" variant="outline" onClick={() => { setEditingId(agent.id); setEditForm({ ...agent }); }}>
                           <Settings2 className="w-3 h-3 mr-1" /> Edit Profile
                         </Button>
