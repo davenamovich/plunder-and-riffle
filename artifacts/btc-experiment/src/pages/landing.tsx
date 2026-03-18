@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useGetAgentStats } from "@workspace/api-client-react";
@@ -23,6 +23,7 @@ const ROTATING_ROLES = [
 export default function Landing() {
   const { isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
+  const search = useSearch();
   const [selectedRole, setSelectedRole] = useState("");
   const [customRole, setCustomRole] = useState("");
   const [rotatorIndex, setRotatorIndex] = useState(0);
@@ -30,6 +31,13 @@ export default function Landing() {
   const { data: stats } = useGetAgentStats("ralph", {
     query: { retry: false, refetchInterval: 30000 },
   });
+
+  // Capture referral code from URL (?ref=CODE or ?r=SLUG) and persist to sessionStorage
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const ref = params.get("ref") || params.get("r");
+    if (ref) sessionStorage.setItem("btc_ref", ref);
+  }, [search]);
 
   // Cycle through roles in the hero
   useEffect(() => {
@@ -43,7 +51,9 @@ export default function Landing() {
 
   function handleStart() {
     const role = activeRole || "Business Owner";
-    navigate(`/icp?role=${encodeURIComponent(role)}`);
+    const ref = sessionStorage.getItem("btc_ref") || new URLSearchParams(search).get("ref") || "";
+    const refPart = ref ? `&ref=${encodeURIComponent(ref)}` : "";
+    navigate(`/icp?role=${encodeURIComponent(role)}${refPart}`);
   }
 
   if (isAuthenticated) {

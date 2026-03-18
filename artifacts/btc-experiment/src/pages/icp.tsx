@@ -17,6 +17,7 @@ export default function IcpPage() {
   const search = useSearch();
   const params = new URLSearchParams(search);
   const rawRole = params.get("role") || "Business Owner";
+  const rawRef = params.get("ref") || sessionStorage.getItem("btc_ref") || "";
   const copy = getRoleCopy(rawRole);
 
   const { login, isAuthenticated, user, isLoading } = useAuth();
@@ -55,11 +56,13 @@ export default function IcpPage() {
     setErrorMsg("");
 
     try {
+      const ref = rawRef || sessionStorage.getItem("btc_ref") || "";
       const resp = await fetch("/api/onboarding/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role: rawRole }),
+        body: JSON.stringify({ email, role: rawRole, referralCode: ref || undefined }),
       });
+      if (ref) sessionStorage.removeItem("btc_ref");
       const data = await resp.json();
 
       if (!resp.ok || !data.ok) {

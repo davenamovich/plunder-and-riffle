@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useRoute } from "wouter";
 import { useGetPersonalRotator } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,11 @@ interface RotatorData {
 export default function PersonalRotator() {
   const [, params] = useRoute("/r/:userSlug");
   const userSlug = params?.userSlug;
+
+  // Save referrer slug to sessionStorage so it's captured if they sign up later
+  useEffect(() => {
+    if (userSlug) sessionStorage.setItem("btc_ref", userSlug);
+  }, [userSlug]);
 
   const { data: raw, isLoading, error } = useGetPersonalRotator(userSlug || "", {
     query: {

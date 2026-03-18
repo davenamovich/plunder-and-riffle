@@ -23,13 +23,20 @@ router.post("/onboarding/start", async (req, res) => {
     const normalizedEmail = email.toLowerCase().trim();
     const roleLabel = normalizeRole(role || "");
 
-    // Resolve referrer
+    // Resolve referrer — accepts either a referral code (e.g. ABC123) or a slug (e.g. swift-wolf-3829)
     let referredById: string | null = null;
     if (referralCode && typeof referralCode === "string") {
+      const code = referralCode.trim();
       const referrer = await db
         .select()
         .from(usersTable)
-        .where(eq(usersTable.referralCode, referralCode.toUpperCase()))
+        .where(eq(usersTable.referralCode, code.toUpperCase()))
+        .limit(1)
+        .then((r) => r[0])
+        ?? await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.slug, code.toLowerCase()))
         .limit(1)
         .then((r) => r[0]);
       if (referrer) referredById = referrer.id;

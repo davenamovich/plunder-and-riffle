@@ -60,6 +60,10 @@ export default function ReferralLanding() {
         if (d.fallback) {
           setCountdown(3);
         }
+        // Save referrer slug so attribution is captured if they sign up
+        if (d.referrer?.slug) {
+          sessionStorage.setItem("btc_ref", d.referrer.slug);
+        }
       })
       .catch(() => { setError(true); setLoading(false); });
   }, [agentSlug]);
