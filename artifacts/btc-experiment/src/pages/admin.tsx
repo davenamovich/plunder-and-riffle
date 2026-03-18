@@ -253,11 +253,23 @@ const PIPELINE_STAGES = [
 // ─── Main Admin Page ───────────────────────────────────────────────────────────
 
 export default function Admin() {
-  const { user, isAuthenticated, token } = useAuth();
+  const { user, isAuthenticated, isLoading, token } = useAuth();
   const { toast } = useToast();
   const [leadStatusFilter, setLeadStatusFilter] = useState("pending_approval");
   const [rejectReason, setRejectReason] = useState("");
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+
+  // Wait for auth to finish loading before deciding to redirect
+  if (isLoading || (token && !user)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm">Loading…</span>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated || user?.role !== "admin") {
     return <Redirect to="/" />;
