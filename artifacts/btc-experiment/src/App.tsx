@@ -44,12 +44,17 @@ function Router() {
 
 function App() {
   const privyAppId = import.meta.env.VITE_PRIVY_APP_ID as string;
+  const base = import.meta.env.BASE_URL ?? "/";
+  const loginCallbackUrl = typeof window !== "undefined"
+    ? `${window.location.origin}${base.endsWith("/") ? base.slice(0, -1) : base}`
+    : undefined;
 
   return (
     <PrivyProvider
       appId={privyAppId}
       config={{
         loginMethods: ["email"],
+        loginCallbackUrl,
         appearance: {
           theme: "dark",
           accentColor: "#f7931a",
