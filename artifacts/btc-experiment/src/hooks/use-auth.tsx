@@ -36,9 +36,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setTokenState(newToken);
   }, []);
 
+  // Extract email from any Privy login method (email, Google OAuth, etc.)
+  const getPrivyEmail = (u: typeof privyUser): string | null => {
+    if (!u) return null;
+    if (u.email?.address) return u.email.address;
+    // Google OAuth and other linked accounts carry email on the account object
+    for (const account of (u as any).linkedAccounts ?? []) {
+      if (typeof account.email === "string" && account.email) return account.email;
+    }
+    return null;
+  };
+
   useEffect(() => {
     if (!ready || !authenticated || !privyUser) return;
-    const email = privyUser.email?.address;
+    const email = getPrivyEmail(privyUser);
     if (!email) return;
     if (exchangedRef.current === email) return;
     exchangedRef.current = email;
