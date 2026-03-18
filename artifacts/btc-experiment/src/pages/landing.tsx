@@ -461,7 +461,7 @@ const SPLIT_RECIPIENTS = [
     color: "text-amber-400",
     ring: "border-amber-500/40 bg-amber-500/10",
     glow: "bg-amber-500/20",
-    desc: "The operator who built and maintains the agent fleet takes an equal share.",
+    desc: "The person managing the agent's social media accounts and platform connections — keeping it active, posting, and engaged.",
   },
   {
     label: "Bot Ops",
