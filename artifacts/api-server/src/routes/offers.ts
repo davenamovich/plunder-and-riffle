@@ -100,6 +100,32 @@ router.post("/offers/signup", requireAuth, async (req, res) => {
 router.get("/offers/my", requireAuth, async (req, res) => {
   try {
     const user = (req as any).user;
+    const isAdmin = user.role === "admin";
+
+    // Admin owns all agents — return all active offers automatically
+    if (isAdmin) {
+      const allOffers = await db.select().from(offersTable).where(eq(offersTable.isActive, true));
+      const refLinks = await db.select().from(inheritedRefLinksTable).where(eq(inheritedRefLinksTable.userId, user.id));
+      const refMap = Object.fromEntries(refLinks.map(r => [r.offerId, r.inheritedUrl]));
+
+      // Also pull any explicit signups for signedUpAt timestamps
+      const signups = await db.select().from(offerSignupsTable).where(eq(offerSignupsTable.userId, user.id));
+      const signupMap = Object.fromEntries(signups.map(s => [s.offerId, s]));
+
+      res.json({
+        offers: allOffers.map(o => ({
+          offerId: o.id,
+          offerName: o.name,
+          offerUrl: o.offerUrl,
+          inheritedRefUrl: refMap[o.id] ?? signupMap[o.id]?.affiliateRef ?? o.offerUrl,
+          signedUpAt: signupMap[o.id]?.signedUpAt ?? null,
+          isAdmin: true,
+        })),
+      });
+      return;
+    }
+
+    // Regular users — return only offers they signed up for
     const signups = await db.select({
       signup: offerSignupsTable,
       offer: offersTable,

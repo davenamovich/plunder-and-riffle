@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
+import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Tag, Bot, ExternalLink, CheckCircle, Copy, Link2, Gift, Zap, ShieldCheck,
+  Tag, Bot, ExternalLink, CheckCircle, Copy, Link2, Gift, Zap, ShieldCheck, Settings2,
 } from "lucide-react";
 
 interface Offer {
@@ -37,6 +38,8 @@ export default function OffersPage() {
   const { toast } = useToast();
   const [signingUpId, setSigningUpId] = useState<string | null>(null);
   const headers = token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+
+  const isAdmin = user?.role === "admin";
 
   const { data, isLoading } = useQuery<{ offers: Offer[] }>({
     queryKey: ["offers-public"],
@@ -101,6 +104,18 @@ export default function OffersPage() {
           <p className="text-muted-foreground max-w-xl mx-auto text-lg">
             Each offer is promoted by one of our AI agents. Sign up to claim your personal referral link.
           </p>
+          {isAdmin && (
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 px-3 py-1">
+                <ShieldCheck className="w-3 h-3 mr-1.5" />Admin — you own all agents
+              </Badge>
+              <Button size="sm" variant="outline" asChild>
+                <Link href="/admin">
+                  <Settings2 className="w-3.5 h-3.5 mr-1.5" />Manage Offers
+                </Link>
+              </Button>
+            </div>
+          )}
         </motion.div>
       </div>
 
@@ -108,7 +123,8 @@ export default function OffersPage() {
       {user && myOffers.length > 0 && (
         <div className="mb-10">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Link2 className="w-4 h-4 text-primary" /> Your Referral Links
+            <Link2 className="w-4 h-4 text-primary" />
+            {isAdmin ? "All Offer Links (Admin)" : "Your Referral Links"}
           </h2>
           <div className="grid md:grid-cols-2 gap-3">
             {myOffers.map(mo => (
@@ -208,7 +224,13 @@ export default function OffersPage() {
 
                     {/* Actions */}
                     <div className="flex gap-2 pt-1">
-                      {claimed ? (
+                      {isAdmin ? (
+                        <Button size="sm" variant="outline" className="flex-1" asChild>
+                          <Link href="/admin">
+                            <Settings2 className="w-3.5 h-3.5 mr-1.5" />Edit in Admin
+                          </Link>
+                        </Button>
+                      ) : claimed ? (
                         <Button variant="outline" size="sm" className="flex-1" asChild>
                           <a href={myLink ?? offer.offerUrl} target="_blank" rel="noopener noreferrer">
                             <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Visit Offer
