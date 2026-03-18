@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { agentsTable, offersTable, offerSignupsTable, rotatorSlotsTable } from "@workspace/db/schema";
+import { agentsTable, offersTable, offerSignupsTable, rotatorSlotsTable, inheritedRefLinksTable } from "@workspace/db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 
@@ -9,16 +9,29 @@ const router = Router();
 router.get("/offers", async (req, res) => {
   try {
     const offers = await db.select().from(offersTable).where(eq(offersTable.isActive, true));
-    res.json({ offers: offers.map(o => ({
-      id: o.id,
-      slug: o.slug,
-      name: o.name,
-      description: o.description,
-      offerUrl: o.offerUrl,
-      logoUrl: o.logoUrl,
-      isActive: o.isActive,
-      isQualifying: o.isQualifying,
-    })) });
+    const agents = await db.select({
+      id: agentsTable.id,
+      slug: agentsTable.slug,
+      name: agentsTable.name,
+      avatarUrl: agentsTable.avatarUrl,
+      description: agentsTable.description,
+    }).from(agentsTable);
+    const agentMap = Object.fromEntries(agents.map(a => [a.id, a]));
+
+    res.json({
+      offers: offers.map(o => ({
+        id: o.id,
+        slug: o.slug,
+        name: o.name,
+        description: o.description,
+        offerUrl: o.offerUrl,
+        logoUrl: o.logoUrl,
+        isActive: o.isActive,
+        isQualifying: o.isQualifying,
+        commissionNotes: o.commissionNotes,
+        agent: o.agentId ? agentMap[o.agentId] ?? null : null,
+      })),
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -71,32 +84,13 @@ router.post("/offers/signup", requireAuth, async (req, res) => {
             activatedAt: new Date(),
           }).returning();
 
-          res.json({ success: true, message: "Signed up and free rotator slot activated!", rotatorSlot: {
-            id: slot.id,
-            userId: slot.userId,
-            agentId: slot.agentId,
-            slotType: slot.slotType,
-            status: slot.status,
-            expiresAt: slot.expiresAt,
-            createdAt: slot.createdAt,
-            clickCount: slot.clickCount,
-          }});
+          res.json({ success: true, message: "Signed up and free rotator slot activated!", rotatorSlot: slot });
           return;
         }
       }
     }
 
-    const placeholderSlot = {
-      id: "",
-      userId: user.id,
-      agentId: "",
-      slotType: "free" as const,
-      status: "pending" as const,
-      expiresAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      clickCount: 0,
-    };
-    res.json({ success: true, message: "Signed up for offer!", rotatorSlot: placeholderSlot });
+    res.json({ success: true, message: "Signed up for offer!" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -114,13 +108,18 @@ router.get("/offers/my", requireAuth, async (req, res) => {
     .innerJoin(offersTable, eq(offerSignupsTable.offerId, offersTable.id))
     .where(eq(offerSignupsTable.userId, user.id));
 
-    res.json({ offers: signups.map(s => ({
-      offerId: s.offer.id,
-      offerName: s.offer.name,
-      offerUrl: s.offer.offerUrl,
-      inheritedRefUrl: s.signup.affiliateRef || s.offer.offerUrl,
-      signedUpAt: s.signup.signedUpAt,
-    })) });
+    const refLinks = await db.select().from(inheritedRefLinksTable).where(eq(inheritedRefLinksTable.userId, user.id));
+    const refMap = Object.fromEntries(refLinks.map(r => [r.offerId, r.inheritedUrl]));
+
+    res.json({
+      offers: signups.map(s => ({
+        offerId: s.offer.id,
+        offerName: s.offer.name,
+        offerUrl: s.offer.offerUrl,
+        inheritedRefUrl: refMap[s.offer.id] ?? s.signup.affiliateRef ?? s.offer.offerUrl,
+        signedUpAt: s.signup.signedUpAt,
+      })),
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

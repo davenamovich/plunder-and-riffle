@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable, personalRotatorLinksTable } from "@workspace/db/schema";
-import { eq, and, gt, count } from "drizzle-orm";
+import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable, personalRotatorLinksTable, offersTable, inheritedRefLinksTable } from "@workspace/db/schema";
+import { eq, and, gt, count, sql } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
 import { createAgentWallet, isCDPConfigured } from "../lib/cdp.js";
 import { moltisStatusWithUsage, getDailyUsage } from "../lib/moltis.js";
@@ -620,6 +620,108 @@ router.delete("/admin/agents/:id/cdp-wallet", requireAdmin, async (req, res) => 
       cdpWalletSeed: null, cdpWalletCreatedAt: null, updatedAt: new Date(),
     }).where(eq(agentsTable.id, req.params.id));
     res.json({ success: true, message: "CDP wallet record cleared (on-chain wallet still exists)" });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Offers CRUD ──────────────────────────────────────────────────────────────
+
+router.get("/admin/offers", requireAdmin, async (_req, res) => {
+  try {
+    const offers = await db.select({
+      id: offersTable.id,
+      slug: offersTable.slug,
+      name: offersTable.name,
+      description: offersTable.description,
+      offerUrl: offersTable.offerUrl,
+      logoUrl: offersTable.logoUrl,
+      agentId: offersTable.agentId,
+      commissionNotes: offersTable.commissionNotes,
+      isActive: offersTable.isActive,
+      isQualifying: offersTable.isQualifying,
+      createdAt: offersTable.createdAt,
+      updatedAt: offersTable.updatedAt,
+    }).from(offersTable).orderBy(offersTable.createdAt);
+
+    const agents = await db.select({
+      id: agentsTable.id,
+      slug: agentsTable.slug,
+      name: agentsTable.name,
+      avatarUrl: agentsTable.avatarUrl,
+    }).from(agentsTable);
+
+    const refCounts = await db.select({
+      offerId: inheritedRefLinksTable.offerId,
+      count: count(),
+    }).from(inheritedRefLinksTable).groupBy(inheritedRefLinksTable.offerId);
+
+    const signupCounts = await db.select({
+      offerId: offerSignupsTable.offerId,
+      count: count(),
+    }).from(offerSignupsTable).groupBy(offerSignupsTable.offerId);
+
+    const agentMap = Object.fromEntries(agents.map(a => [a.id, a]));
+    const refMap = Object.fromEntries(refCounts.map(r => [r.offerId, Number(r.count)]));
+    const signupMap = Object.fromEntries(signupCounts.map(s => [s.offerId, Number(s.count)]));
+
+    res.json({
+      offers: offers.map(o => ({
+        ...o,
+        agent: o.agentId ? agentMap[o.agentId] ?? null : null,
+        referrerLinkCount: refMap[o.id] ?? 0,
+        signupCount: signupMap[o.id] ?? 0,
+      })),
+      agents,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.post("/admin/offers", requireAdmin, async (req, res) => {
+  try {
+    const { name, slug, description, offerUrl, logoUrl, agentId, commissionNotes, isActive, isQualifying } = req.body;
+    if (!name || !slug || !offerUrl) { res.status(400).json({ error: "name, slug, offerUrl required" }); return; }
+    const [offer] = await db.insert(offersTable).values({
+      name, slug, offerUrl,
+      description: description || null,
+      logoUrl: logoUrl || null,
+      agentId: agentId || null,
+      commissionNotes: commissionNotes || null,
+      isActive: isActive !== false,
+      isQualifying: !!isQualifying,
+    }).returning();
+    res.json({ success: true, offer });
+  } catch (err: any) {
+    if (err?.code === "23505") { res.status(409).json({ error: "Slug already exists" }); return; }
+    console.error(err); res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/admin/offers/:id", requireAdmin, async (req, res) => {
+  try {
+    const { name, slug, description, offerUrl, logoUrl, agentId, commissionNotes, isActive, isQualifying } = req.body;
+    const [updated] = await db.update(offersTable).set({
+      ...(name && { name }),
+      ...(slug && { slug }),
+      ...(offerUrl && { offerUrl }),
+      description: description ?? null,
+      logoUrl: logoUrl ?? null,
+      agentId: agentId || null,
+      commissionNotes: commissionNotes ?? null,
+      ...(isActive !== undefined && { isActive }),
+      ...(isQualifying !== undefined && { isQualifying }),
+      updatedAt: new Date(),
+    }).where(eq(offersTable.id, req.params.id)).returning();
+    if (!updated) { res.status(404).json({ error: "Offer not found" }); return; }
+    res.json({ success: true, offer: updated });
+  } catch (err: any) {
+    if (err?.code === "23505") { res.status(409).json({ error: "Slug already exists" }); return; }
+    console.error(err); res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/admin/offers/:id", requireAdmin, async (req, res) => {
+  try {
+    await db.delete(offersTable).where(eq(offersTable.id, req.params.id));
+    res.json({ success: true });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 

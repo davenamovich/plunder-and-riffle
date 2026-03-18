@@ -4,7 +4,7 @@ import { usersTable, referralRotatorTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { signToken } from "../lib/auth.js";
-import { slugify, generateReferralCode, generateUserSlug } from "../lib/slugify.js";
+import { generateReferralCode, generateRandomSlug } from "../lib/slugify.js";
 import { createUserWallet, isCDPConfigured } from "../lib/cdp.js";
 
 const router = Router();

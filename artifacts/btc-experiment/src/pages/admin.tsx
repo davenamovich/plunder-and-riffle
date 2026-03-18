@@ -38,7 +38,8 @@ import {
   RefreshCw, Activity, Users, Clock, ChevronDown, ChevronUp, Eye,
   AlertTriangle, ToggleLeft, ToggleRight, Mail, Send, BarChart2,
   Check, Ban, Copy, Plus, Minus, Wallet, Gem, PauseCircle, PlayCircle,
-  Settings2, ExternalLink, Plug, Link2, MessageSquare, Loader2
+  Settings2, ExternalLink, Plug, Link2, MessageSquare, Loader2,
+  Tag, Edit3, Gift, ShieldCheck,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -397,7 +398,7 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="ralph" className="w-full">
-        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-9 h-11 mb-8">
+        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-10 h-11 mb-8">
           <TabsTrigger value="ralph" className="flex items-center gap-1.5">
             <Bot className="w-3.5 h-3.5" /> Ralph
           </TabsTrigger>
@@ -417,6 +418,9 @@ export default function Admin() {
           <TabsTrigger value="settings">Config</TabsTrigger>
           <TabsTrigger value="agents"><Bot className="w-3.5 h-3.5 mr-1" />Agents</TabsTrigger>
           <TabsTrigger value="wallets"><Wallet className="w-3.5 h-3.5 mr-1" />Wallets</TabsTrigger>
+          <TabsTrigger value="offers" className="flex items-center gap-1.5">
+            <Tag className="w-3.5 h-3.5" /> Offers
+          </TabsTrigger>
           <TabsTrigger value="chat" className="flex items-center gap-1.5">
             <MessageSquare className="w-3.5 h-3.5" /> Chat
           </TabsTrigger>
@@ -1140,6 +1144,11 @@ export default function Admin() {
           <WalletsTab token={token} />
         </TabsContent>
 
+        {/* ── OFFERS TAB ── */}
+        <TabsContent value="offers">
+          <OffersTab token={token} />
+        </TabsContent>
+
         {/* ── CHAT TAB ── */}
         <TabsContent value="chat">
           <MoltisChatTab token={token} />
@@ -1722,5 +1731,256 @@ function MoltisChatTab({ token }: { token: string | null }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ─── Offers Tab ────────────────────────────────────────────────────────────────
+
+const EMPTY_OFFER = {
+  name: "", slug: "", description: "", offerUrl: "", logoUrl: "",
+  agentId: "", commissionNotes: "", isActive: true, isQualifying: false,
+};
+
+function OffersTab({ token }: { token: string | null }) {
+  const { toast } = useToast();
+  const headers = token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({ ...EMPTY_OFFER });
+  const [saving, setSaving] = useState(false);
+
+  const { data, isLoading, refetch } = useQuery<{ offers: any[]; agents: any[] }>({
+    queryKey: ["admin-offers"],
+    queryFn: () => fetch("/api/admin/offers", { headers }).then(r => r.json()),
+    staleTime: 30_000,
+  });
+
+  const offers: any[] = data?.offers ?? [];
+  const agents: any[] = data?.agents ?? [];
+
+  function startCreate() {
+    setForm({ ...EMPTY_OFFER });
+    setEditingId(null);
+    setShowForm(true);
+  }
+
+  function startEdit(offer: any) {
+    setForm({
+      name: offer.name,
+      slug: offer.slug,
+      description: offer.description ?? "",
+      offerUrl: offer.offerUrl,
+      logoUrl: offer.logoUrl ?? "",
+      agentId: offer.agentId ?? "",
+      commissionNotes: offer.commissionNotes ?? "",
+      isActive: offer.isActive,
+      isQualifying: offer.isQualifying,
+    });
+    setEditingId(offer.id);
+    setShowForm(true);
+  }
+
+  function autoSlug(name: string) {
+    return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  }
+
+  async function save() {
+    if (!form.name || !form.slug || !form.offerUrl) {
+      toast({ title: "Name, slug, and offer URL are required", variant: "destructive" }); return;
+    }
+    setSaving(true);
+    try {
+      const url = editingId ? `/api/admin/offers/${editingId}` : "/api/admin/offers";
+      const method = editingId ? "PUT" : "POST";
+      const res = await fetch(url, { method, headers, body: JSON.stringify(form) }).then(r => r.json());
+      if (res.error) { toast({ title: "Error", description: res.error, variant: "destructive" }); return; }
+      toast({ title: editingId ? "Offer updated" : "Offer created" });
+      setShowForm(false);
+      setEditingId(null);
+      refetch();
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteOffer(id: string, name: string) {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    const res = await fetch(`/api/admin/offers/${id}`, { method: "DELETE", headers }).then(r => r.json());
+    if (res.success) { toast({ title: "Offer deleted" }); refetch(); }
+    else toast({ title: "Delete failed", description: res.error, variant: "destructive" });
+  }
+
+  async function toggleActive(offer: any) {
+    const res = await fetch(`/api/admin/offers/${offer.id}`, {
+      method: "PUT", headers, body: JSON.stringify({ isActive: !offer.isActive }),
+    }).then(r => r.json());
+    if (res.success) refetch();
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">Offers Management</h2>
+          <p className="text-sm text-muted-foreground">{offers.length} offer{offers.length !== 1 ? "s" : ""} total</p>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => refetch()}><RefreshCw className="w-3.5 h-3.5 mr-1" />Refresh</Button>
+          <Button size="sm" onClick={startCreate}><Plus className="w-3.5 h-3.5 mr-1" />New Offer</Button>
+        </div>
+      </div>
+
+      {/* Create / Edit Form */}
+      {showForm && (
+        <Card className="glass-panel border-primary/30">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Gift className="w-4 h-4 text-primary" />
+              {editingId ? "Edit Offer" : "Create New Offer"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Name *</label>
+                <Input value={form.name} onChange={e => {
+                  const n = e.target.value;
+                  setForm(f => ({ ...f, name: n, slug: f.slug || autoSlug(n) }));
+                }} placeholder="Bitcoin Course" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Slug *</label>
+                <Input value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} placeholder="bitcoin-course" className="font-mono" />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-xs font-medium text-muted-foreground">Offer URL *</label>
+                <Input value={form.offerUrl} onChange={e => setForm(f => ({ ...f, offerUrl: e.target.value }))} placeholder="https://example.com/offer?ref=YOURCODE" />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-xs font-medium text-muted-foreground">Description</label>
+                <Textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief description of the offer…" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Logo URL</label>
+                <Input value={form.logoUrl} onChange={e => setForm(f => ({ ...f, logoUrl: e.target.value }))} placeholder="https://…/logo.png" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Agent</label>
+                <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={form.agentId}
+                  onChange={e => setForm(f => ({ ...f, agentId: e.target.value }))}>
+                  <option value="">— No agent —</option>
+                  {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-xs font-medium text-muted-foreground">Commission / Notes (shown to users)</label>
+                <Input value={form.commissionNotes} onChange={e => setForm(f => ({ ...f, commissionNotes: e.target.value }))} placeholder="e.g. 25% lifetime commission" />
+              </div>
+              <div className="flex gap-6">
+                <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded" />
+                  Active
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <input type="checkbox" checked={form.isQualifying} onChange={e => setForm(f => ({ ...f, isQualifying: e.target.checked }))} className="rounded" />
+                  Qualifies for rotator slot
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => { setShowForm(false); setEditingId(null); }}>Cancel</Button>
+              <Button onClick={save} disabled={saving}>
+                {saving ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Saving…</> : "Save Offer"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Offers Table */}
+      {isLoading ? (
+        <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
+      ) : offers.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <Gift className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p>No offers yet. Create your first one above.</p>
+        </div>
+      ) : (
+        <Card className="border-border/50">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Offer</TableHead>
+                <TableHead>Agent</TableHead>
+                <TableHead>Ref Links</TableHead>
+                <TableHead>Signups</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {offers.map(o => (
+                <TableRow key={o.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      {o.logoUrl
+                        ? <img src={o.logoUrl} alt={o.name} className="w-7 h-7 rounded object-cover border border-border/30" />
+                        : <div className="w-7 h-7 rounded bg-muted/50 flex items-center justify-center"><Tag className="w-3.5 h-3.5 text-muted-foreground" /></div>}
+                      <div>
+                        <div className="font-medium text-sm">{o.name}</div>
+                        <div className="font-mono text-[10px] text-muted-foreground">{o.slug}</div>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {o.agent
+                      ? <div className="flex items-center gap-1.5 text-xs"><Bot className="w-3.5 h-3.5 text-primary" />{o.agent.name}</div>
+                      : <span className="text-xs text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1 text-xs">
+                      <Link2 className="w-3.5 h-3.5 text-muted-foreground" />
+                      {o.referrerLinkCount}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1 text-xs">
+                      <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                      {o.signupCount}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline" className={`text-[10px] ${o.isActive ? "text-green-400 border-green-500/30" : "text-muted-foreground"}`}>
+                        {o.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                      {o.isQualifying && <Badge variant="outline" className="text-[10px] text-primary border-primary/30"><Zap className="w-2.5 h-2.5 mr-1" />Qualifies</Badge>}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title={o.isActive ? "Deactivate" : "Activate"} onClick={() => toggleActive(o)}>
+                        {o.isActive ? <ToggleRight className="w-3.5 h-3.5 text-green-400" /> : <ToggleLeft className="w-3.5 h-3.5 text-muted-foreground" />}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Edit" onClick={() => startEdit(o)}>
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" title="Delete" onClick={() => deleteOffer(o.id, o.name)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+    </div>
   );
 }

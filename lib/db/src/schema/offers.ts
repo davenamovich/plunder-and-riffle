@@ -2,6 +2,7 @@ import { pgTable, text, timestamp, boolean, integer } from "drizzle-orm/pg-core"
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
+import { agentsTable } from "./agents";
 
 export const offersTable = pgTable("offers", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -10,9 +11,12 @@ export const offersTable = pgTable("offers", {
   description: text("description"),
   offerUrl: text("offer_url").notNull(),
   logoUrl: text("logo_url"),
+  agentId: text("agent_id").references(() => agentsTable.id, { onDelete: "set null" }),
+  commissionNotes: text("commission_notes"),
   isActive: boolean("is_active").notNull().default(true),
   isQualifying: boolean("is_qualifying").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const insertOfferSchema = createInsertSchema(offersTable).omit({ id: true, createdAt: true });
