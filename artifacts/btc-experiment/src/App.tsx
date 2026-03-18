@@ -55,6 +55,10 @@ function App() {
       config={{
         loginMethods: ["email"],
         loginCallbackUrl,
+        email: {
+          sendEmailFromCoolAddress: false,
+          loginType: "code",
+        },
         appearance: {
           theme: "dark",
           accentColor: "#f7931a",
