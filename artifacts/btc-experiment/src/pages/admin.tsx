@@ -393,7 +393,7 @@ export default function Admin() {
         <ShieldAlert className="w-8 h-8 text-destructive" />
         <div>
           <h1 className="text-3xl font-bold font-display tracking-tight">Admin Controls</h1>
-          <p className="text-sm text-muted-foreground">Manage the BTC Experiment platform</p>
+          <p className="text-sm text-muted-foreground">Manage the Plunder and Riffle platform</p>
         </div>
       </div>
 

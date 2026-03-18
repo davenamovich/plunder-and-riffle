@@ -44,7 +44,7 @@ const ICP_MAP: Record<string, RoleCopy> = {
       "You're creating for platforms that own your audience",
       "One bad month can wipe out your momentum",
     ],
-    whyThisHelps: "The BTC Experiment gives you a link in an AI-driven rotator — traffic that doesn't depend on your posting frequency. Your free trial runs for 24 hours. No algorithm. No gatekeeping. Just the system working.",
+    whyThisHelps: "Plunder and Riffle gives you a link in an AI-driven rotator — traffic that doesn't depend on your posting frequency. Your free trial runs for 24 hours. No algorithm. No gatekeeping. Just the system working.",
     proof: "You built an audience. Now let an agent build the pipeline behind it.",
   },
   "freelancer": {
@@ -70,7 +70,7 @@ const ICP_MAP: Record<string, RoleCopy> = {
       "By the time most opportunities are 'proven,' the upside is gone",
       "Building something feels impossible without a team or resources",
     ],
-    whyThisHelps: "The BTC Experiment is designed for people who want to be early. Your free 24 hours puts you in the system right now — before this becomes mainstream. You don't need capital. You need a link and 24 hours.",
+    whyThisHelps: "Plunder and Riffle is designed for people who want to be early. Your free 24 hours puts you in the system right now — before this becomes mainstream. You don't need capital. You need a link and 24 hours.",
     proof: "Everyone will have an agent. The ones who got in early will already have proof it works.",
   },
   "gym owner": {
@@ -122,7 +122,7 @@ const ICP_MAP: Record<string, RoleCopy> = {
       "Donor acquisition is expensive and competitive",
       "Impact is hard to prove without a trail of engaged attention",
     ],
-    whyThisHelps: "The BTC Experiment routes real traffic to your link — for free, for 24 hours, no donation required. Think of it as a proof-of-concept for what automated reach could do for your mission.",
+    whyThisHelps: "Plunder and Riffle routes real traffic to your link — for free, for 24 hours, no donation required. Think of it as a proof-of-concept for what automated reach could do for your mission.",
     proof: "The agent doesn't discriminate by budget. Your 24 hours work the same as everyone else's.",
   },
   "dasher": {

@@ -23,10 +23,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center space-x-2 group">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold font-display shadow-[0_0_15px_rgba(247,147,26,0.4)] group-hover:shadow-[0_0_25px_rgba(247,147,26,0.6)] transition-all">
-              B
+              P
             </div>
             <span className="font-display font-bold text-lg tracking-tight hidden sm:inline-block">
-              BTC Experiment
+              Plunder & Riffle
             </span>
           </Link>
 
@@ -86,9 +86,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center space-x-2">
             <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center text-primary-foreground font-bold font-display text-xs">
-              B
+              P
             </div>
-            <span className="font-display font-semibold text-sm">The BTC Experiment</span>
+            <span className="font-display font-semibold text-sm">Plunder and Riffle</span>
           </div>
           <p className="text-sm text-muted-foreground">
             Let the agent prove it first. 24-hour rotators powered by AI.

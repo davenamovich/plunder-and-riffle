@@ -126,7 +126,7 @@ export default function ReferralLanding() {
         <div className="mb-6 w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center">
           <Bitcoin className="w-8 h-8 text-primary" />
         </div>
-        <h1 className="text-2xl font-bold mb-2">{data.agent?.name ?? "BTC Experiment"}</h1>
+        <h1 className="text-2xl font-bold mb-2">{data.agent?.name ?? "Plunder and Riffle"}</h1>
         <p className="text-muted-foreground mb-6">Redirecting you in {countdown}…</p>
         <Button onClick={claimSpot} className="bg-primary hover:bg-primary/90">
           <ExternalLink className="w-4 h-4 mr-2" /> Go Now
@@ -175,7 +175,7 @@ export default function ReferralLanding() {
             {displayName}
           </h1>
           <p className="text-muted-foreground text-sm">
-            Member of the <span className="text-primary font-medium">BTC Experiment</span>
+            Member of <span className="text-primary font-medium">Plunder and Riffle</span>
           </p>
         </motion.div>
 
@@ -296,7 +296,7 @@ export default function ReferralLanding() {
         <div className="mt-10 text-center">
           <p className="text-xs text-muted-foreground mb-1">Powered by</p>
           <a href="/" className="font-display font-bold text-sm hover:text-primary transition-colors">
-            The BTC Experiment
+            Plunder and Riffle
           </a>
         </div>
       </div>

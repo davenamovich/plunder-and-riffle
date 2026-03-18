@@ -81,7 +81,7 @@ async function getAgentContext(agentSlug = "ralph"): Promise<{
   ];
 
   // Build persona string incorporating ICP pain points for Moltis
-  let persona = agent.persona || "Ralph Loop — BTC Experiment Agent";
+  let persona = agent.persona || "Ralph Loop — Plunder and Riffle Agent";
   if (icpPainPoints.length > 0) {
     persona += `\n\nICP Pain Points (use these to personalise replies):\n${icpPainPoints.map(p => `- ${p}`).join("\n")}`;
   }

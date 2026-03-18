@@ -170,7 +170,7 @@ router.post("/leads/:id/draft", requireAdmin, async (req, res) => {
       return;
     }
 
-    const persona: string = req.body.persona || "Ralph, the BTC Experiment agent";
+    const persona: string = req.body.persona || "Ralph, the Plunder and Riffle agent";
     const { draft } = await draftResponse(lead.content, persona, lead.postUrl);
 
     const [updated] = await db

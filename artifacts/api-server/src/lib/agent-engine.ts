@@ -87,7 +87,7 @@ function buildFallbackPost(platform: Platform, agentName: string, refLink: strin
       `Your AI agent is live. 24-hour free slot, no credit card. Start here → ${refLink}`,
     ],
     linkedin: [
-      `I've been experimenting with AI-driven lead generation and the results are compelling.\n\nThe BTC Experiment gives every business owner a free 24-hour AI agent slot — no credit card required.\n\nIf you're curious about what AI can do for your pipeline, this is worth a look: ${refLink}`,
+      `I've been experimenting with AI-driven lead generation and the results are compelling.\n\nPlunder and Riffle gives every business owner a free 24-hour AI agent slot — no credit card required.\n\nIf you're curious about what AI can do for your pipeline, this is worth a look: ${refLink}`,
       `The future of business development is autonomous AI agents working around the clock.\n\nI've been testing this and the early results speak for themselves.\n\nFree trial available here: ${refLink}`,
     ],
   };
@@ -181,7 +181,7 @@ export async function runEngineForAgent(
   if (agent.postTemplates) {
     try { postTemplates = JSON.parse(agent.postTemplates); } catch { /* ignore */ }
   }
-  const persona = agent.persona || `${agent.name} — BTC Experiment AI Agent`;
+  const persona = agent.persona || `${agent.name} — Plunder and Riffle AI Agent`;
 
   try {
     // 3. Get all active slots for this agent

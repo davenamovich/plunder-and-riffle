@@ -424,7 +424,7 @@ function IncomeStackSection() {
           ))}
         </div>
 
-        {/* Plus BTC experiment referral callout */}
+        {/* Plus Plunder and Riffle referral callout */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -437,10 +437,10 @@ function IncomeStackSection() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-bold text-base text-foreground mb-0.5">
-              Plus: The BTC Experiment Referral
+              Plus: The Plunder and Riffle Referral
             </p>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              On top of the five stacking streams, every referral you bring into the BTC Experiment
+              On top of the five stacking streams, every referral you bring into Plunder and Riffle
               itself earns you direct credit inside the platform — separate from the web2 offer commissions.
               Your chain grows. Your credit grows with it.
             </p>

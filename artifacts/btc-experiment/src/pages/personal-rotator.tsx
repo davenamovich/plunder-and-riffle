@@ -154,7 +154,7 @@ export default function PersonalRotator() {
         <div className="mt-16 text-center">
           <p className="text-xs text-muted-foreground mb-2">Powered by</p>
           <a href="/" className="font-display font-bold text-sm hover:text-primary transition-colors">
-            The BTC Experiment
+            Plunder and Riffle
           </a>
         </div>
       </div>
