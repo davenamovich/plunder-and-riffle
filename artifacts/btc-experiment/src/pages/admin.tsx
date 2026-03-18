@@ -38,7 +38,7 @@ import {
   RefreshCw, Activity, Users, Clock, ChevronDown, ChevronUp, Eye,
   AlertTriangle, ToggleLeft, ToggleRight, Mail, Send, BarChart2,
   Check, Ban, Copy, Plus, Minus, Wallet, Gem, PauseCircle, PlayCircle,
-  Settings2, ExternalLink, Plug, Link2
+  Settings2, ExternalLink, Plug, Link2, MessageSquare, Loader2
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -385,7 +385,7 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="ralph" className="w-full">
-        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-8 h-11 mb-8">
+        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-9 h-11 mb-8">
           <TabsTrigger value="ralph" className="flex items-center gap-1.5">
             <Bot className="w-3.5 h-3.5" /> Ralph
           </TabsTrigger>
@@ -405,6 +405,9 @@ export default function Admin() {
           <TabsTrigger value="settings">Config</TabsTrigger>
           <TabsTrigger value="agents"><Bot className="w-3.5 h-3.5 mr-1" />Agents</TabsTrigger>
           <TabsTrigger value="wallets"><Wallet className="w-3.5 h-3.5 mr-1" />Wallets</TabsTrigger>
+          <TabsTrigger value="chat" className="flex items-center gap-1.5">
+            <MessageSquare className="w-3.5 h-3.5" /> Chat
+          </TabsTrigger>
         </TabsList>
 
         {/* ── RALPH TAB ── */}
@@ -1125,6 +1128,11 @@ export default function Admin() {
           <WalletsTab token={token} />
         </TabsContent>
 
+        {/* ── CHAT TAB ── */}
+        <TabsContent value="chat">
+          <MoltisChatTab token={token} />
+        </TabsContent>
+
       </Tabs>
     </div>
   );
@@ -1508,5 +1516,106 @@ function WalletsTab({ token }: { token: string | null }) {
         </Card>
       )}
     </div>
+  );
+}
+
+// ─── Moltis Chat Tab ───────────────────────────────────────────────────────────
+
+interface ChatMsg { role: "user" | "assistant"; content: string; }
+
+function MoltisChatTab({ token }: { token: string | null }) {
+  const [messages, setMessages] = React.useState<ChatMsg[]>([]);
+  const [input, setInput] = React.useState("");
+  const [sending, setSending] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const bottomRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  async function send() {
+    const text = input.trim();
+    if (!text || sending) return;
+    setInput("");
+    setError(null);
+    const next: ChatMsg[] = [...messages, { role: "user", content: text }];
+    setMessages(next);
+    setSending(true);
+    try {
+      const res = await fetch("/api/moltis/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ messages: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Chat request failed");
+      const reply: string = data.choices?.[0]?.message?.content ?? data.reply ?? JSON.stringify(data);
+      setMessages(prev => [...prev, { role: "assistant", content: reply }]);
+    } catch (e: any) {
+      setError(e.message ?? "Unknown error");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Card className="border-border/40 bg-card/50">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <MessageSquare className="w-4 h-4 text-primary" />
+          Moltis AI Chat
+        </CardTitle>
+        <CardDescription>Chat directly with the Moltis AI gateway (Chutes.ai · Mistral Small)</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-lg border border-border/30 bg-background/40 min-h-[420px] max-h-[520px] overflow-y-auto p-4 space-y-3">
+          {messages.length === 0 && (
+            <p className="text-center text-muted-foreground text-sm py-16">
+              Send a message to start chatting with Moltis.
+            </p>
+          )}
+          {messages.map((m, i) => (
+            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[80%] rounded-xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                m.role === "user"
+                  ? "bg-primary text-primary-foreground rounded-br-sm"
+                  : "bg-muted/60 text-foreground rounded-bl-sm border border-border/30"
+              }`}>
+                {m.content}
+              </div>
+            </div>
+          ))}
+          {sending && (
+            <div className="flex justify-start">
+              <div className="bg-muted/60 border border-border/30 rounded-xl rounded-bl-sm px-4 py-2.5">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              </div>
+            </div>
+          )}
+          {error && (
+            <div className="flex justify-center">
+              <span className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-1.5">
+                {error}
+              </span>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+        <div className="flex gap-2">
+          <Input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
+            placeholder="Message Moltis…"
+            disabled={sending}
+            className="flex-1"
+          />
+          <Button onClick={send} disabled={sending || !input.trim()} size="icon">
+            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "postgresql-16"]
+modules = ["nodejs-24", "postgresql-16", "python-3.11"]
 
 [[artifacts]]
 id = "artifacts/api-server"
@@ -30,12 +30,12 @@ args = "Moltis: AI Gateway"
 name = "Moltis: AI Gateway"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "export PATH=\"$PATH:$HOME/.local/bin\"; moltis gateway --no-tls --port 13131"
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "export PATH=\"$PATH:$HOME/.local/bin\"; export OPENAI_API_KEY=$CHUTES_API_KEY; moltis gateway --no-tls --port 13131"
 
 [agent]
 stack = "PNPM_WORKSPACE"
