@@ -9,6 +9,92 @@ import { requireAuth, optionalAuth } from "../lib/auth.js";
 
 const router = Router();
 
+// GET /rotator/land/:agentSlug — picks a slot and returns full referral context for the landing page
+router.get("/rotator/land/:agentSlug", async (req, res) => {
+  try {
+    const agent = await db.select().from(agentsTable).where(eq(agentsTable.slug, req.params.agentSlug)).limit(1).then(r => r[0]);
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+
+    const fallbackUrl = agent.fallbackUrl || agent.offerUrl || "https://bitcoin.org";
+
+    if (agent.isPaused) {
+      res.json({ fallback: true, redirectUrl: fallbackUrl, agent: { name: agent.name, slug: agent.slug, avatarUrl: agent.avatarUrl, description: agent.description } });
+      return;
+    }
+
+    const now = new Date();
+    const activeSlots = await db.select({
+      slot: rotatorSlotsTable,
+      user: {
+        id: usersTable.id,
+        slug: usersTable.slug,
+        displayName: usersTable.displayName,
+        email: usersTable.email,
+        walletAddress: usersTable.walletAddress,
+        roleLabel: usersTable.roleLabel,
+      },
+    })
+    .from(rotatorSlotsTable)
+    .innerJoin(usersTable, eq(rotatorSlotsTable.userId, usersTable.id))
+    .where(and(eq(rotatorSlotsTable.agentId, agent.id), eq(rotatorSlotsTable.status, "active"), gt(rotatorSlotsTable.expiresAt, now)));
+
+    if (!activeSlots.length) {
+      res.json({ fallback: true, redirectUrl: fallbackUrl, agent: { name: agent.name, slug: agent.slug, avatarUrl: agent.avatarUrl, description: agent.description } });
+      return;
+    }
+
+    const weightedPool: typeof activeSlots = [];
+    for (const s of activeSlots) {
+      const weight = s.slot.slotType === "paid" ? agent.paidSlotWeight : agent.freeSlotWeight;
+      for (let i = 0; i < weight; i++) weightedPool.push(s);
+    }
+    const chosen = weightedPool[Math.floor(Math.random() * weightedPool.length)];
+
+    // Increment click counts
+    await Promise.all([
+      db.update(rotatorSlotsTable).set({ clickCount: sql`${rotatorSlotsTable.clickCount} + 1` }).where(eq(rotatorSlotsTable.id, chosen.slot.id)),
+      db.update(agentsTable).set({ totalClicks: sql`${agentsTable.totalClicks} + 1` }).where(eq(agentsTable.id, agent.id)),
+    ]);
+
+    // Find the user's qualifying offer
+    const qualifying = await db.select({ offer: offersTable }).from(offerSignupsTable)
+      .innerJoin(offersTable, eq(offerSignupsTable.offerId, offersTable.id))
+      .where(and(eq(offerSignupsTable.userId, chosen.user.id), eq(offersTable.isQualifying, true)))
+      .limit(1).then(r => r[0]);
+
+    const redirectUrl = qualifying?.offer?.offerUrl || agent.offerUrl || fallbackUrl;
+    const offer = qualifying?.offer ?? null;
+
+    res.json({
+      fallback: false,
+      redirectUrl,
+      slotType: chosen.slot.slotType,
+      agent: {
+        name: agent.name,
+        slug: agent.slug,
+        avatarUrl: agent.avatarUrl,
+        description: agent.description,
+        totalClicks: agent.totalClicks,
+      },
+      referrer: {
+        slug: chosen.user.slug,
+        displayName: chosen.user.displayName,
+        walletAddress: chosen.user.walletAddress,
+        roleLabel: chosen.user.roleLabel,
+      },
+      offer: offer ? {
+        name: offer.name,
+        description: offer.description,
+        logoUrl: offer.logoUrl,
+        commissionNotes: (offer as any).commissionNotes ?? null,
+      } : null,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/rotator/redirect/:agentSlug", optionalAuth, async (req, res) => {
   try {
     const agent = await db.select().from(agentsTable).where(eq(agentsTable.slug, req.params.agentSlug)).limit(1).then(r => r[0]);

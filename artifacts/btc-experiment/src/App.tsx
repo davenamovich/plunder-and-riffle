@@ -16,6 +16,7 @@ import AgentsPage from "@/pages/agents";
 import MyAgentPage from "@/pages/my-agent";
 import EnginePage from "@/pages/engine";
 import OffersPage from "@/pages/offers";
+import ReferralLanding from "@/pages/referral-landing";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,8 @@ function Router() {
       <Route path="/agent/:slug" component={AgentPage} />
       <Route path="/r/:userSlug" component={PersonalRotator} />
       <Route path="/offers" component={OffersPage} />
+      <Route path="/join/:agentSlug" component={ReferralLanding} />
+      <Route path="/join" component={() => { window.location.replace("/join/ralph"); return null; }} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
