@@ -259,22 +259,6 @@ export default function Admin() {
   const [rejectReason, setRejectReason] = useState("");
   const [rejectingId, setRejectingId] = useState<string | null>(null);
 
-  // Wait for auth to finish loading before deciding to redirect
-  if (isLoading || (token && !user)) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm">Loading…</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated || user?.role !== "admin") {
-    return <Redirect to="/" />;
-  }
-
   // ── DM Sequences editor state ──
   const [editingSeqId, setEditingSeqId] = useState<string | null>(null);
   const [editingSeqName, setEditingSeqName] = useState("");
@@ -292,6 +276,22 @@ export default function Admin() {
   const { data: funnelData, refetch: refetchFunnel } = useGetAdminFunnel();
   const { data: dmQueueData, refetch: refetchDmQueue } = useGetDmQueue(dmQueueFilter);
   const { data: seqData, refetch: refetchSeqs } = useGetDmSequences();
+
+  // Wait for auth to finish loading before deciding to redirect
+  if (isLoading || (token && !user)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm">Loading…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || user?.role !== "admin") {
+    return <Redirect to="/" />;
+  }
 
   // ── Mutation hooks ──
   const { mutate: updateSettings, isPending: isSavingSettings } = useUpdateAdminSettings({
@@ -1497,6 +1497,20 @@ function WalletsTab({ token }: { token: string | null }) {
     },
   });
 
+  const [provisioningId, setProvisioningId] = useState<string | null>(null);
+  const provisionWallet = useMutation({
+    mutationFn: (userId: string) =>
+      fetch(`/api/admin/users/${userId}/cdp-wallet`, { method: "POST", headers }).then(r => r.json()),
+    onMutate: (userId) => setProvisioningId(userId),
+    onSuccess: (res: any, userId) => {
+      setProvisioningId(null);
+      if (res.error) { toast({ title: "CDP Error", description: res.error, variant: "destructive" }); return; }
+      toast({ title: "Wallet created", description: res.address });
+      refetch();
+    },
+    onError: () => { setProvisioningId(null); toast({ title: "Error", description: "Wallet creation failed", variant: "destructive" }); },
+  });
+
   const wallets: any[] = data?.wallets ?? [];
   const allSelected = wallets.length > 0 && selected.length === wallets.length;
 
@@ -1555,11 +1569,11 @@ function WalletsTab({ token }: { token: string | null }) {
                   <input type="checkbox" checked={allSelected} onChange={toggleAll} className="rounded" />
                 </TableHead>
                 <TableHead>User</TableHead>
-                <TableHead>Slug</TableHead>
                 <TableHead>Wallet Address</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>CDP</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Referred By Wallet</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1568,8 +1582,10 @@ function WalletsTab({ token }: { token: string | null }) {
                   <TableCell>
                     <input type="checkbox" checked={selected.includes(w.id)} onChange={() => toggle(w.id)} className="rounded" />
                   </TableCell>
-                  <TableCell className="text-xs">{w.email}</TableCell>
-                  <TableCell><span className="font-mono text-xs text-primary">/{w.slug}</span></TableCell>
+                  <TableCell>
+                    <div className="text-xs font-medium">{w.email}</div>
+                    <div className="font-mono text-[10px] text-primary">/{w.slug}</div>
+                  </TableCell>
                   <TableCell>
                     {w.walletAddress
                       ? <span className="font-mono text-xs">{w.walletAddress.slice(0,10)}…{w.walletAddress.slice(-6)}</span>
@@ -1581,11 +1597,22 @@ function WalletsTab({ token }: { token: string | null }) {
                       w.walletStatus === "pending" ? "text-amber-400 border-amber-500/30" : "text-muted-foreground"
                     }`}>{w.walletStatus}</Badge>
                   </TableCell>
-                  <TableCell className="text-xs">{w.roleLabel || "—"}</TableCell>
                   <TableCell>
-                    {w.walletAddress
-                      ? <span className="font-mono text-[10px] text-muted-foreground">{w.walletAddress.slice(0,8)}…</span>
-                      : <span className="text-muted-foreground text-xs">no wallet</span>}
+                    {w.cdpWalletId
+                      ? <span className="font-mono text-[10px] text-green-400" title={w.cdpWalletId}>CDP ✓</span>
+                      : <span className="text-[10px] text-muted-foreground">no CDP</span>}
+                  </TableCell>
+                  <TableCell className="text-xs">{w.roleLabel || "—"}</TableCell>
+                  <TableCell className="text-right">
+                    {!w.cdpWalletId && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs"
+                        disabled={provisioningId === w.id}
+                        onClick={() => provisionWallet.mutate(w.id)}>
+                        {provisioningId === w.id
+                          ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Creating…</>
+                          : <><Wallet className="w-3 h-3 mr-1" />Create Wallet</>}
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

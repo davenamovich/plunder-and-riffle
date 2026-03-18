@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { signToken } from "../lib/auth.js";
 import { slugify, generateReferralCode, generateUserSlug } from "../lib/slugify.js";
+import { createUserWallet, isCDPConfigured } from "../lib/cdp.js";
 
 const router = Router();
 
@@ -18,6 +19,8 @@ router.get("/auth/me", requireAuth, async (req, res) => {
     role: user.role,
     createdAt: user.createdAt,
     referralCode: user.referralCode,
+    walletAddress: user.walletAddress,
+    walletStatus: user.walletStatus,
   });
 });
 
@@ -53,6 +56,7 @@ router.post("/auth/login", async (req, res) => {
         referralCode: generateReferralCode(),
         referredById,
         walletAddress: normalizedWallet,
+        walletStatus: normalizedWallet ? "active" : "none",
       }).returning();
       user = newUser;
 
@@ -64,10 +68,30 @@ router.post("/auth/login", async (req, res) => {
           isActive: true,
         }).onConflictDoNothing();
       }
+
+      // Auto-provision a CDP wallet for this new user (background — does not block login response)
+      if (isCDPConfigured() && !normalizedWallet) {
+        setImmediate(async () => {
+          try {
+            const wallet = await createUserWallet(normalizedEmail);
+            await db.update(usersTable).set({
+              walletAddress: wallet.address,
+              walletStatus: "active",
+              cdpWalletId: wallet.walletId,
+              cdpWalletSeed: wallet.seed,
+              cdpWalletCreatedAt: new Date(),
+              updatedAt: new Date(),
+            }).where(eq(usersTable.id, newUser.id));
+            console.log(`[cdp] auto-provisioned wallet for ${normalizedEmail}: ${wallet.address}`);
+          } catch (err) {
+            console.error(`[cdp] failed to auto-provision wallet for ${normalizedEmail}:`, err);
+          }
+        });
+      }
+
     } else if (normalizedWallet && user.walletAddress !== normalizedWallet) {
-      // Update wallet address if it changed or wasn't set yet
       const [updated] = await db.update(usersTable)
-        .set({ walletAddress: normalizedWallet, updatedAt: new Date() })
+        .set({ walletAddress: normalizedWallet, walletStatus: "active", updatedAt: new Date() })
         .where(eq(usersTable.id, user.id))
         .returning();
       if (updated) user = updated;
@@ -83,6 +107,8 @@ router.post("/auth/login", async (req, res) => {
         role: user.role,
         createdAt: user.createdAt,
         referralCode: user.referralCode,
+        walletAddress: user.walletAddress,
+        walletStatus: user.walletStatus,
       },
       token,
     });

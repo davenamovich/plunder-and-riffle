@@ -499,7 +499,9 @@ router.get("/admin/wallets", requireAdmin, async (req, res) => {
     const users = await db.select({
       id: usersTable.id, email: usersTable.email, slug: usersTable.slug,
       displayName: usersTable.displayName, walletAddress: usersTable.walletAddress,
-      walletStatus: usersTable.walletStatus, roleLabel: usersTable.roleLabel, createdAt: usersTable.createdAt,
+      walletStatus: usersTable.walletStatus, roleLabel: usersTable.roleLabel,
+      cdpWalletId: usersTable.cdpWalletId, cdpWalletCreatedAt: usersTable.cdpWalletCreatedAt,
+      createdAt: usersTable.createdAt,
     }).from(usersTable);
 
     res.json({
@@ -531,10 +533,42 @@ router.post("/admin/wallets/sweep", requireAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
-// ─── CDP Wallet — status + create ─────────────────────────────────────────────
+// ─── CDP Wallet — status, user wallets, agent wallets ─────────────────────────
 
 router.get("/admin/cdp/status", requireAdmin, async (_req, res) => {
   res.json({ configured: isCDPConfigured() });
+});
+
+// Create CDP wallet for an existing user (manual provisioning from admin)
+router.post("/admin/users/:id/cdp-wallet", requireAdmin, async (req, res) => {
+  try {
+    const user = await db.select().from(usersTable).where(eq(usersTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!user) { res.status(404).json({ error: "User not found" }); return; }
+    if (user.cdpWalletId) {
+      res.status(409).json({ error: "User already has a CDP wallet", walletId: user.cdpWalletId, address: user.walletAddress });
+      return;
+    }
+    if (!isCDPConfigured()) {
+      res.status(503).json({ error: "CDP credentials not configured on server" });
+      return;
+    }
+    const { createUserWallet: createW } = await import("../lib/cdp.js");
+    console.log(`[cdp] admin creating wallet for user ${user.email}…`);
+    const wallet = await createW(user.email);
+    const [updated] = await db.update(usersTable).set({
+      walletAddress: wallet.address,
+      walletStatus: "active",
+      cdpWalletId: wallet.walletId,
+      cdpWalletSeed: wallet.seed,
+      cdpWalletCreatedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(usersTable.id, req.params.id)).returning();
+    console.log(`[cdp] wallet created for ${user.email}: ${wallet.address}`);
+    res.json({ success: true, address: updated.walletAddress, walletId: updated.cdpWalletId, network: wallet.network });
+  } catch (err: any) {
+    console.error("[cdp] user wallet error:", err);
+    res.status(500).json({ error: err?.message ?? "Failed to create wallet" });
+  }
 });
 
 router.post("/admin/agents/:id/cdp-wallet", requireAdmin, async (req, res) => {
