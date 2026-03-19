@@ -31,7 +31,7 @@ export default function AgentPage() {
   });
 
   const handleRedirect = () => {
-    window.location.href = `/join/${slug}`;
+    window.location.href = "/";
   };
 
   if (isLoadingAgent) {
