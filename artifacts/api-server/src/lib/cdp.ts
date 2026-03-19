@@ -39,16 +39,52 @@ export interface AgentWalletInfo {
   createdAt: Date | null;
 }
 
+// ─── Retry helper ─────────────────────────────────────────────────────────────
+
+function isRateLimitError(err: any): boolean {
+  return (
+    err?.httpCode === 429 ||
+    err?.apiCode === "resource_exhausted" ||
+    String(err?.message ?? "").toLowerCase().includes("rate limit") ||
+    String(err?.message ?? "").toLowerCase().includes("resource_exhausted")
+  );
+}
+
+async function withRetry<T>(
+  label: string,
+  fn: () => Promise<T>,
+  maxAttempts = 5,
+): Promise<T> {
+  const delays = [0, 4000, 12000, 30000, 60000]; // 0s, 4s, 12s, 30s, 60s
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      if (attempt > 0) {
+        const delay = delays[attempt] ?? 60000;
+        console.log(`[cdp] ${label} — rate limited, retry ${attempt}/${maxAttempts - 1} in ${delay / 1000}s…`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+      return await fn();
+    } catch (err: any) {
+      const isLast = attempt === maxAttempts - 1;
+      if (isRateLimitError(err) && !isLast) continue;
+      throw err;
+    }
+  }
+  throw new Error(`[cdp] ${label} — exhausted all retries`);
+}
+
 // ─── Wallet creation ──────────────────────────────────────────────────────────
 
 export async function createWallet(network = "base-mainnet"): Promise<CDPWalletResult> {
   configureCDP();
-  const wallet = await Wallet.create({ networkId: network });
-  const defaultAddress = await wallet.getDefaultAddress();
-  const address = defaultAddress.getId();
-  const walletId = wallet.getId() ?? "";
-  const seed = JSON.stringify(await wallet.export());
-  return { walletId, address, network, seed };
+  return withRetry("createWallet", async () => {
+    const wallet = await Wallet.create({ networkId: network });
+    const defaultAddress = await wallet.getDefaultAddress();
+    const address = defaultAddress.getId();
+    const walletId = wallet.getId() ?? "";
+    const seed = JSON.stringify(await wallet.export());
+    return { walletId, address, network, seed };
+  });
 }
 
 // Create agent wallet — logs agent name for traceability

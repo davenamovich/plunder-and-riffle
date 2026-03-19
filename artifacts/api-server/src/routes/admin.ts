@@ -598,6 +598,7 @@ router.put("/admin/dm-sequences/:id", requireAdmin, async (req, res) => {
 
 router.get("/admin/agents-fleet", requireAdmin, async (req, res) => {
   try {
+    const adminUser = (req as any).user;
     const agents = await db.select().from(agentsTable);
     const now = new Date();
     const enriched = await Promise.all(agents.map(async (agent) => {
@@ -629,6 +630,8 @@ router.get("/admin/agents-fleet", requireAdmin, async (req, res) => {
         cdpWalletNetwork: agent.cdpWalletNetwork, cdpWalletCreatedAt: agent.cdpWalletCreatedAt,
         characterName: agent.characterName, characterStyle: agent.characterStyle,
         characterImageUrl: agent.characterImageUrl, characterPrompt: agent.characterPrompt,
+        ownerId: agent.ownerId,
+        ownsAgent: adminUser?.id ? agent.ownerId === adminUser.id : false,
       };
     }));
     res.json({ agents: enriched });
@@ -796,11 +799,11 @@ router.post("/admin/agents/provision-all-wallets", requireAdmin, async (req, res
     // Respond immediately — provision in background
     res.json({ ok: true, message: `Provisioning wallets for ${needsWallet.length} agent(s) in background`, provisioning: needsWallet.map(a => a.slug) });
 
-    // Background loop — 1.5s delay between each to stay under CDP rate limit
+    // Background loop — 5s delay between each to stay under CDP rate limit
     const { createAgentWallet } = await import("../lib/cdp.js");
     for (const agent of needsWallet) {
       try {
-        await new Promise(r => setTimeout(r, 1500));
+        await new Promise(r => setTimeout(r, 5000));
         const wallet = await createAgentWallet(agent.slug);
         await db.update(agentsTable).set({
           cdpWalletId: wallet.walletId,
@@ -817,6 +820,46 @@ router.post("/admin/agents/provision-all-wallets", requireAdmin, async (req, res
     }
   } catch (err: any) {
     if (!res.headersSent) res.status(500).json({ error: err?.message });
+  }
+});
+
+// POST /api/admin/agents/:id/create-wallet — manually provision wallet for a single agent
+router.post("/admin/agents/:id/create-wallet", requireAdmin, async (req, res) => {
+  try {
+    if (!isCDPConfigured()) { res.status(503).json({ error: "CDP not configured — set CDP_KEY_ID and CDP_API_KEY" }); return; }
+
+    const agent = await db.select({
+      id: agentsTable.id, slug: agentsTable.slug, name: agentsTable.name,
+      cdpWalletId: agentsTable.cdpWalletId, cdpWalletAddress: agentsTable.cdpWalletAddress,
+    }).from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+    if (agent.cdpWalletId) {
+      res.json({ ok: true, message: "Wallet already exists", address: agent.cdpWalletAddress });
+      return;
+    }
+
+    console.log(`[cdp] manual wallet creation for agent ${agent.slug} (${agent.id})`);
+    const wallet = await createAgentWallet("base-mainnet", `${agent.name} [${agent.slug}]`);
+
+    await db.update(agentsTable).set({
+      cdpWalletId: wallet.walletId,
+      cdpWalletAddress: wallet.address,
+      cdpWalletNetwork: wallet.network,
+      cdpWalletSeed: wallet.seed ?? null,
+      cdpWalletCreatedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(agentsTable.id, agent.id));
+
+    console.log(`[cdp] wallet created for agent ${agent.slug}: ${wallet.address}`);
+    res.json({ ok: true, address: wallet.address, walletId: wallet.walletId, network: wallet.network });
+  } catch (err: any) {
+    const isRateLimit = err?.httpCode === 429 || err?.apiCode === "resource_exhausted";
+    console.error(`[cdp] wallet creation failed for agent ${req.params.id}:`, err?.message);
+    res.status(isRateLimit ? 429 : 500).json({
+      error: isRateLimit ? "CDP rate limit hit. The system will retry automatically — wait 60s and try again." : (err?.message ?? "Wallet creation failed"),
+      retryAfter: isRateLimit ? 60 : undefined,
+    });
   }
 });
 
@@ -1073,8 +1116,13 @@ router.post("/admin/agents/:id/cdp-wallet", requireAdmin, async (req, res) => {
       createdAt: updated.cdpWalletCreatedAt,
     });
   } catch (err: any) {
-    console.error("[cdp] wallet creation error:", err);
-    res.status(500).json({ error: err?.message ?? "Failed to create CDP wallet" });
+    console.error("[cdp] wallet creation error:", err?.apiCode ?? err?.message);
+    const isRateLimit = err?.httpCode === 429 || err?.apiCode === "resource_exhausted";
+    res.status(isRateLimit ? 429 : 500).json({
+      error: isRateLimit
+        ? "CDP rate limit exhausted after retries. Wait a few minutes before trying again."
+        : (err?.message ?? "Failed to create CDP wallet"),
+    });
   }
 });
 

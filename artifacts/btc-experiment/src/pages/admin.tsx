@@ -3122,14 +3122,15 @@ function AgentPersonaEngineTab({ token }: { token: string | null }) {
 
   async function createAgent() {
     const p = { ...generatedPersona, ...editedPersona } as GeneratedPersona;
-    if (!p.name || !offerUrl) {
-      toast({ title: "Agent name and offer URL required", variant: "destructive" }); return;
+    if (!p.name) {
+      toast({ title: "Agent name is required", variant: "destructive" }); return;
     }
     setCreating(true);
     try {
       const slug = p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
       const body = {
-        slug, name: p.name, description: p.description, persona: p.persona, offerUrl,
+        slug, name: p.name, description: p.description, persona: p.persona,
+        offerUrl: offerUrl || "https://plunderandriffle.com",
         icpContext: p.icpContext,
         postTemplates: JSON.stringify(p.postTemplates ?? []),
         characterPrompt: p.characterPrompt,
@@ -3443,7 +3444,7 @@ function AgentPersonaEngineTab({ token }: { token: string | null }) {
               {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
               Regenerate
             </Button>
-            <Button disabled={!offerUrl || creating} onClick={createAgent} className="flex-1 md:flex-none md:min-w-[180px]">
+            <Button disabled={creating} onClick={createAgent} className="flex-1 md:flex-none md:min-w-[180px]">
               {creating
                 ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Creating…</>
                 : <><Plus className="w-4 h-4 mr-1.5" />Create Agent</>}
