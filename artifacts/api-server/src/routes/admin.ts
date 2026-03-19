@@ -6,6 +6,7 @@ import { eq, and, gt, count, sql, desc, gte, isNull as isNullDrizzle } from "dri
 import { requireAdmin } from "../lib/auth.js";
 import { createAgentWallet, isCDPConfigured, getWalletBalances, sweepWallet } from "../lib/cdp.js";
 import { buildAgentRegistrationJson, registerAgentIdentity, IDENTITY_REGISTRY_ADDRESS } from "../lib/erc8004.js";
+import { createAgentInbox, getAgentInbox, listInboxMessages, sendFromInbox, isAgentMailConfigured } from "../lib/agentmail.js";
 import { CdpClient } from "@coinbase/cdp-sdk";
 import { createPublicClient, http } from "viem";
 import { base } from "viem/chains";
@@ -650,6 +651,10 @@ router.get("/admin/agents-fleet", requireAdmin, async (req, res) => {
         erc8004TokenId: agent.erc8004TokenId,
         erc8004AgentUri: agent.erc8004AgentUri,
         erc8004RegisteredAt: agent.erc8004RegisteredAt,
+        // AgentMail
+        agentmailInboxId: agent.agentmailInboxId,
+        agentmailAddress: agent.agentmailAddress,
+        agentmailCreatedAt: agent.agentmailCreatedAt,
       };
     }));
     res.json({ agents: enriched, cdpConfigured: isCDPConfigured() });
@@ -962,6 +967,87 @@ router.post("/admin/agents/:id/register-identity", requireAdmin, async (req, res
         ? `Agent wallet needs Base ETH for gas. Fund ${(await db.select({ addr: agentsTable.cdpWalletAddress }).from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]?.addr)) ?? "the wallet"} with ~0.01 Base ETH.`
         : undefined,
     });
+  }
+});
+
+// ─── AgentMail inbox management ───────────────────────────────────────────────
+
+// POST /api/admin/agents/:id/create-inbox — provision an AgentMail inbox
+router.post("/admin/agents/:id/create-inbox", requireAdmin, async (req, res) => {
+  try {
+    if (!isAgentMailConfigured()) return res.status(503).json({ error: "AGENTMAIL_API_KEY not configured" });
+
+    const agent = await db.select().from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+
+    if (agent.agentmailInboxId) {
+      return res.json({
+        ok: true,
+        alreadyExisted: true,
+        inboxId: agent.agentmailInboxId,
+        address: agent.agentmailAddress,
+        message: `Inbox already exists: ${agent.agentmailAddress}`,
+      });
+    }
+
+    const inbox = await createAgentInbox(agent.slug);
+
+    await db.update(agentsTable).set({
+      agentmailInboxId: inbox.inboxId,
+      agentmailAddress: inbox.address,
+      agentmailCreatedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(agentsTable.id, req.params.id));
+
+    console.log(`[agentmail] inbox created for ${agent.slug}: ${inbox.address}`);
+    res.json({ ok: true, inboxId: inbox.inboxId, address: inbox.address });
+  } catch (err: any) {
+    console.error("[agentmail] create-inbox failed:", err?.message);
+    res.status(500).json({ error: err?.message ?? "Failed to create inbox" });
+  }
+});
+
+// GET /api/admin/agents/:id/inbox — get inbox info + recent messages
+router.get("/admin/agents/:id/inbox", requireAdmin, async (req, res) => {
+  try {
+    const agent = await db.select({
+      id: agentsTable.id, slug: agentsTable.slug, name: agentsTable.name,
+      agentmailInboxId: agentsTable.agentmailInboxId,
+      agentmailAddress: agentsTable.agentmailAddress,
+      agentmailCreatedAt: agentsTable.agentmailCreatedAt,
+    }).from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+    if (!agent.agentmailInboxId) return res.json({ configured: false, messages: [] });
+
+    const messages = await listInboxMessages(agent.agentmailInboxId, 20);
+    res.json({
+      configured: true,
+      inboxId: agent.agentmailInboxId,
+      address: agent.agentmailAddress,
+      createdAt: agent.agentmailCreatedAt,
+      messages,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "Failed to fetch inbox" });
+  }
+});
+
+// POST /api/admin/agents/:id/inbox/send — send an email from the agent's inbox
+router.post("/admin/agents/:id/inbox/send", requireAdmin, async (req, res) => {
+  try {
+    const { to, subject, text } = req.body;
+    if (!to || !subject || !text) return res.status(400).json({ error: "to, subject, and text are required" });
+
+    const agent = await db.select({ agentmailInboxId: agentsTable.agentmailInboxId }).from(agentsTable)
+      .where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+    if (!agent.agentmailInboxId) return res.status(400).json({ error: "Agent has no inbox — create one first" });
+
+    const result = await sendFromInbox(agent.agentmailInboxId, to, subject, text);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "Failed to send email" });
   }
 });
 

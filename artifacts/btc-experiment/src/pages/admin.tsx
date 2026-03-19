@@ -1583,6 +1583,15 @@ function AgentsFleetTab({ token }: { token: string | null }) {
     onSuccess: () => { toast({ title: "CDP wallet record cleared" }); qc.invalidateQueries({ queryKey: ["admin-fleet"] }); },
   });
 
+  const createInbox = useMutation({
+    mutationFn: (id: string) => fetch(`/api/admin/agents/${id}/create-inbox`, { method: "POST", headers }).then(r => r.json()),
+    onSuccess: (res: any) => {
+      if (res.error) { toast({ title: "AgentMail Error", description: res.error, variant: "destructive" }); return; }
+      toast({ title: res.alreadyExisted ? "Inbox exists" : "Inbox created", description: res.address });
+      qc.invalidateQueries({ queryKey: ["admin-fleet"] });
+    },
+  });
+
   const agents: any[] = data?.agents ?? [];
 
   return (
@@ -1811,6 +1820,42 @@ function AgentsFleetTab({ token }: { token: string | null }) {
                                   <p className="font-mono text-[10px] text-muted-foreground">{agent.cdpWalletId}</p>
                                 </div>
                               )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* AgentMail Inbox section */}
+                        <div className="rounded-lg border border-border/40 bg-muted/10 p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Mail className="w-3.5 h-3.5 text-primary" />
+                              <span className="text-xs font-medium">Agent Email</span>
+                              {agent.agentmailAddress
+                                ? <Badge className="text-xs bg-green-500/15 text-green-400 border border-green-500/30">Active</Badge>
+                                : <Badge variant="outline" className="text-xs text-muted-foreground">No inbox</Badge>}
+                            </div>
+                            {!agent.agentmailAddress && (
+                              <Button size="sm" variant="outline" className="h-6 px-2 text-xs"
+                                onClick={() => createInbox.mutate(agent.id)}
+                                disabled={createInbox.isPending}>
+                                {createInbox.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Plus className="w-3 h-3 mr-1" />}
+                                Create Inbox
+                              </Button>
+                            )}
+                          </div>
+                          {agent.agentmailAddress && (
+                            <div className="text-xs space-y-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-muted-foreground">Address:</span>
+                                <span className="font-mono text-primary">{agent.agentmailAddress}</span>
+                                <button onClick={() => navigator.clipboard.writeText(agent.agentmailAddress).then(() => toast({ title: "Copied!" }))} title="Copy">
+                                  <Copy className="w-2.5 h-2.5 text-muted-foreground hover:text-foreground" />
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-muted-foreground">Inbox ID:</span>
+                                <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[160px]">{agent.agentmailInboxId}</span>
+                              </div>
                             </div>
                           )}
                         </div>

@@ -14,6 +14,7 @@
     "@types/nodemailer": "^7.0.11",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
+    "agentmail": "^0.4.9",
     "bcryptjs": "^3.0.3",
     "bs58": "^6.0.0",
     "composio-core": "^0.5.39",

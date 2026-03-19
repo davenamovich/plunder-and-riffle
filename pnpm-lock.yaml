@@ -191,6 +191,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      agentmail:
+        specifier: ^0.4.9
+        version: 0.4.9(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -246,6 +249,43 @@ importers:
       tsx:
         specifier: 'catalog:'
         version: 4.21.0
+
+  artifacts/brody-video:
+    dependencies:
+      framer-motion:
+        specifier: 12.35.1
+        version: 12.35.1(@emotion/is-prop-valid@1.4.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      lucide-react:
+        specifier: 0.545.0
+        version: 0.545.0(react@19.1.0)
+      react:
+        specifier: 19.1.0
+        version: 19.1.0
+      react-dom:
+        specifier: 19.1.0
+        version: 19.1.0(react@19.1.0)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.1.14
+        version: 4.2.1(vite@7.3.1(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2))
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.0
+        version: 19.2.3(@types/react@19.2.14)
+      '@vitejs/plugin-react':
+        specifier: ^5.0.4
+        version: 5.1.4(vite@7.3.1(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2))
+      tailwindcss:
+        specifier: ^4.1.14
+        version: 4.2.1
+      typescript:
+        specifier: ~5.7.2
+        version: 5.7.3
+      vite:
+        specifier: ^7.3.0
+        version: 7.3.1(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2)
 
   artifacts/btc-experiment:
     dependencies:
@@ -3017,6 +3057,10 @@ packages:
     resolution: {integrity: sha512-kja8j7PjmncONqaTsB8fQ+wE2mSU2DJ9D4XKoJ5PFWIdRMa6SLSN1ff4mOr4jCbfRSsxR4keIiySJU0N9T5hIQ==}
     engines: {node: '>= 8.0.0'}
 
+  agentmail@0.4.9:
+    resolution: {integrity: sha512-VTY5DgzQB53yiC5sTQ0hkKJkiLMMk+ySuzxdt06nSfO6nAds69GLqKNToXZ43gPeAD7KAI9fX23+90N1cBLkdw==}
+    engines: {node: '>=18.0.0'}
+
   ajv-draft-04@1.0.0:
     resolution: {integrity: sha512-mv00Te6nmYbRp5DCwclxtt7yV/joXJPGS7nM+97GdxvuttCOfgI3K4U25zboyeX0O+myI8ERluxQe5wljMmVIw==}
     peerDependencies:
@@ -5512,6 +5556,11 @@ packages:
 
   typeforce@1.18.0:
     resolution: {integrity: sha512-7uc1O8h1M1g0rArakJdf0uLRSSgFcYexrVoKo+bzJd32gd4gDy2L/Z+8/FjPnU9ydY3pEnVPtr9FyscYY60K1g==}
+
+  typescript@5.7.3:
+    resolution: {integrity: sha512-84MVSjMEHP+FQRPy3pX9sTVV/INIex71s9TL2Gm5FG/WG1SqXeKyZ0k7/blY/4FdOzI12CBy1vGc4og/eus0fw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
 
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
@@ -10295,6 +10344,13 @@ snapshots:
     dependencies:
       humanize-ms: 1.2.1
 
+  agentmail@0.4.9(bufferutil@4.1.0)(utf-8-validate@5.0.10):
+    dependencies:
+      ws: 8.19.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
   ajv-draft-04@1.0.0(ajv@8.18.0):
     optionalDependencies:
       ajv: 8.18.0
@@ -12797,6 +12853,8 @@ snapshots:
       yaml: 2.8.2
 
   typeforce@1.18.0: {}
+
+  typescript@5.7.3: {}
 
   typescript@5.9.3: {}
 

@@ -73,6 +73,10 @@ export const agentsTable = pgTable("agents", {
   botOpsSweepThresholdUsd: real("bot_ops_sweep_threshold_usd").notNull().default(10),
   protocolWalletAddress: text("protocol_wallet_address"),
   adminWalletAddress: text("admin_wallet_address"),
+  // AgentMail — per-agent email inbox (agentmail.to)
+  agentmailInboxId:      text("agentmail_inbox_id"),
+  agentmailAddress:      text("agentmail_address"),      // e.g. ralph@agentmail.to
+  agentmailCreatedAt:    timestamp("agentmail_created_at"),
   // ERC-8004 Onchain Agent Identity Registry (base mainnet, Jan 2026)
   erc8004TokenId: text("erc8004_token_id"),          // uint256 returned from register()
   erc8004AgentUri: text("erc8004_agent_uri"),         // URI used at registration time
