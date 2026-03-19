@@ -4,9 +4,11 @@ import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTab
 import { eq, and, gt, count, sql } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
 import { createAgentWallet, isCDPConfigured, getWalletBalances, sweepWallet } from "../lib/cdp.js";
-import { moltisStatusWithUsage, getDailyUsage } from "../lib/moltis.js";
+import { moltisStatusWithUsage, getDailyUsage, chatOnce } from "../lib/moltis.js";
 import { runRalphLoop, approveLead, rejectLead as ralphRejectLead, markLeadPosted } from "../lib/ralph.js";
 import { runSportsTipsEngine, pingTelegram } from "../lib/sports-tips.js";
+import { buildPersonaGenerationPrompt, buildHookGenerationPrompt, PERSONA_ARCHETYPES, SKILL_TAGS, LEAD_GEN_SKILL_SUMMARY } from "../lib/lead-gen-skill.js";
+import { getEntityConnections, initiateConnection, isComposioConfigured, COMPOSIO_APPS, executeAction } from "../lib/composio.js";
 import { getFunnelSummary, getRecentEvents } from "../lib/funnel.js";
 import {
   getAllSequences, getDmQueue, triggerDmForLead,
@@ -1069,6 +1071,143 @@ router.get("/admin/token-usage", requireAdmin, async (req, res) => {
 
     res.json({ rows, grandTotal });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Lead Gen Skill — persona archetypes & skill catalog ─────────────────────
+
+router.get("/admin/lead-gen-skill", requireAdmin, (_req, res) => {
+  res.json({
+    archetypes: PERSONA_ARCHETYPES.map(a => ({
+      id: a.id, name: a.name, role: a.role, description: a.description,
+      voice: a.voice, strengths: a.strengths, defaultHookStyles: a.defaultHookStyles,
+      defaultPlatforms: a.defaultPlatforms, exampleHooks: a.exampleHooks,
+    })),
+    skillTags: SKILL_TAGS,
+    summary: LEAD_GEN_SKILL_SUMMARY,
+  });
+});
+
+// ─── AI Persona Generation ────────────────────────────────────────────────────
+
+router.post("/admin/agents/generate-persona", requireAdmin, async (req, res) => {
+  const { niche, targetMarket, offerType, platforms, archetypeId, skills, urgencyLevel } = req.body;
+  if (!niche || !targetMarket || !offerType) {
+    res.status(400).json({ error: "niche, targetMarket, and offerType are required" }); return;
+  }
+
+  const archetype = PERSONA_ARCHETYPES.find(a => a.id === archetypeId) ?? PERSONA_ARCHETYPES[0];
+  const prompt = buildPersonaGenerationPrompt({
+    niche, targetMarket, offerType,
+    platforms: platforms ?? ["twitter", "linkedin"],
+    archetype,
+    skills: skills ?? archetype.strengths,
+    urgencyLevel: urgencyLevel ?? "medium",
+  });
+
+  try {
+    const raw = await chatOnce(prompt, { maxTokens: 1200, agentId: "system", task: "persona_gen" });
+    // Strip any markdown fences
+    const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+    res.json({
+      ok: true,
+      persona: parsed,
+      archetype: { id: archetype.id, name: archetype.name, imagePrompt: archetype.imagePrompt },
+    });
+  } catch (err: any) {
+    console.error("[persona-gen] error:", err?.message);
+    res.status(500).json({ error: "Persona generation failed", detail: err?.message });
+  }
+});
+
+// ─── AI Hook Generation ───────────────────────────────────────────────────────
+
+router.post("/admin/agents/generate-hooks", requireAdmin, async (req, res) => {
+  const { niche, targetMarket, offerType, painPoints, urgencyLevel } = req.body;
+  if (!niche || !targetMarket || !offerType) {
+    res.status(400).json({ error: "niche, targetMarket, and offerType are required" }); return;
+  }
+
+  const prompt = buildHookGenerationPrompt({
+    niche, targetMarket, offerType,
+    painPoints: painPoints ?? "time, money, status, fear of being left behind",
+    urgencyLevel: urgencyLevel ?? "high",
+  });
+
+  try {
+    const raw = await chatOnce(prompt, { maxTokens: 2000, agentId: "system", task: "hook_gen" });
+    const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+    res.json({ ok: true, hooks: parsed.hooks ?? [] });
+  } catch (err: any) {
+    console.error("[hook-gen] error:", err?.message);
+    res.status(500).json({ error: "Hook generation failed", detail: err?.message });
+  }
+});
+
+// ─── Composio integration ─────────────────────────────────────────────────────
+
+router.get("/admin/composio/status", requireAdmin, (_req, res) => {
+  res.json({
+    configured: isComposioConfigured(),
+    apps: COMPOSIO_APPS,
+  });
+});
+
+router.get("/admin/agents/:id/composio/connections", requireAdmin, async (req, res) => {
+  try {
+    const agent = await db.select({ id: agentsTable.id, composioEntityId: agentsTable.composioEntityId })
+      .from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+    if (!agent.composioEntityId) {
+      res.json({ connections: [], entityId: null, configured: isComposioConfigured() }); return;
+    }
+    const connections = await getEntityConnections(agent.composioEntityId);
+    res.json({ connections, entityId: agent.composioEntityId, configured: isComposioConfigured() });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+router.post("/admin/agents/:id/composio/connect", requireAdmin, async (req, res) => {
+  const { appName, redirectUrl } = req.body;
+  if (!appName) { res.status(400).json({ error: "appName required" }); return; }
+  if (!isComposioConfigured()) { res.status(503).json({ error: "Composio not configured" }); return; }
+
+  try {
+    const agent = await db.select().from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+
+    // Auto-create entityId from agent slug if not set
+    let entityId = agent.composioEntityId ?? `pr_agent_${agent.slug}`;
+    if (!agent.composioEntityId) {
+      await db.update(agentsTable).set({ composioEntityId: entityId, updatedAt: new Date() })
+        .where(eq(agentsTable.id, agent.id));
+    }
+
+    const result = await initiateConnection(entityId, appName, redirectUrl);
+    res.json({ ...result, entityId });
+  } catch (err: any) {
+    console.error("[composio-connect]", err);
+    res.status(500).json({ error: err?.message ?? "Connection failed" });
+  }
+});
+
+router.post("/admin/agents/:id/composio/test-post", requireAdmin, async (req, res) => {
+  const { platform, content } = req.body;
+  if (!platform || !content) { res.status(400).json({ error: "platform and content required" }); return; }
+
+  try {
+    const agent = await db.select({ composioEntityId: agentsTable.composioEntityId })
+      .from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!agent?.composioEntityId) { res.status(400).json({ error: "Agent has no Composio entityId" }); return; }
+
+    const app = COMPOSIO_APPS.find(a => a.id === platform);
+    if (!app) { res.status(400).json({ error: `Unknown platform: ${platform}` }); return; }
+
+    const result = await executeAction(agent.composioEntityId, app.action, { text: content, message: content });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
 });
 
 export default router;

@@ -39,7 +39,7 @@ import {
   AlertTriangle, ToggleLeft, ToggleRight, Mail, Send, BarChart2,
   Check, Ban, Copy, Plus, Minus, Wallet, Gem, PauseCircle, PlayCircle,
   Settings2, ExternalLink, Plug, Link2, MessageSquare, Loader2,
-  Tag, Edit3, Gift, ShieldCheck, UserPlus, UserMinus, UserCheck,
+  Tag, Edit3, Gift, ShieldCheck, UserPlus, UserMinus, UserCheck, ArrowRight,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -432,6 +432,9 @@ export default function Admin() {
           </TabsTrigger>
           <TabsTrigger value="fleet-metrics" className="flex items-center gap-1.5">
             <Wallet className="w-3.5 h-3.5" /> Fleet
+          </TabsTrigger>
+          <TabsTrigger value="persona-engine" className="flex items-center gap-1.5">
+            <Zap className="w-3.5 h-3.5" /> Persona Engine
           </TabsTrigger>
         </TabsList>
 
@@ -1201,6 +1204,10 @@ export default function Admin() {
 
         <TabsContent value="fleet-metrics">
           <AgentFleetMetricsTab token={token} />
+        </TabsContent>
+
+        <TabsContent value="persona-engine">
+          <AgentPersonaEngineTab token={token} />
         </TabsContent>
 
       </Tabs>
@@ -2918,6 +2925,474 @@ function AgentFleetMetricsTab({ token }: { token: string | null }) {
         </CardContent>
       </Card>
 
+    </div>
+  );
+}
+
+// ─── Agent Persona Engine Tab ─────────────────────────────────────────────────
+
+const ARCHETYPE_ROLE_COLORS: Record<string, string> = {
+  larry:   "border-amber-500/40 bg-amber-500/5 text-amber-400",
+  moltis:  "border-blue-500/40 bg-blue-500/5 text-blue-400",
+  ralph:   "border-green-500/40 bg-green-500/5 text-green-400",
+  hybrid:  "border-purple-500/40 bg-purple-500/5 text-purple-400",
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  larry: "Hook Engine", moltis: "Distribution Engine", ralph: "Improvement Engine", hybrid: "Hybrid Specialist",
+};
+
+const PLATFORMS_OPTS = ["twitter", "linkedin", "reddit", "telegram", "tiktok"];
+const URGENCY_OPTS   = [
+  { id: "low",    label: "Low — Informational" },
+  { id: "medium", label: "Medium — Opportunity" },
+  { id: "high",   label: "High — Act Now" },
+];
+
+interface GeneratedPersona {
+  name: string; persona: string; icpContext: string;
+  postTemplates: string[]; description: string;
+  characterPrompt: string; twitterHandle: string;
+}
+interface GeneratedHook {
+  text: string; style: string; persona: string;
+  platform: string; ctaSuggestion: string; confidence: number; why: string;
+}
+interface SkillTagItem { id: string; label: string; description: string; category: string; }
+interface ArchetypeItem {
+  id: string; name: string; role: string; description: string; voice: string;
+  strengths: string[]; defaultHookStyles: string[];
+  defaultPlatforms: string[]; exampleHooks: string[];
+}
+
+function AgentPersonaEngineTab({ token }: { token: string | null }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const [step, setStep] = React.useState<1|2|3|4>(1);
+  const [selectedArchetype, setSelectedArchetype] = React.useState<ArchetypeItem | null>(null);
+  const [brief, setBrief] = React.useState({
+    niche: "", targetMarket: "", offerType: "", painPoints: "",
+    platforms: ["twitter", "linkedin"] as string[],
+    urgencyLevel: "high" as "low"|"medium"|"high",
+    skills: [] as string[],
+  });
+  const [generating, setGenerating] = React.useState(false);
+  const [generatingHooks, setGeneratingHooks] = React.useState(false);
+  const [generatedPersona, setGeneratedPersona] = React.useState<GeneratedPersona | null>(null);
+  const [generatedHooks, setGeneratedHooks] = React.useState<GeneratedHook[]>([]);
+  const [creating, setCreating] = React.useState(false);
+  const [offerUrl, setOfferUrl] = React.useState("");
+  const [editedPersona, setEditedPersona] = React.useState<Partial<GeneratedPersona>>({});
+
+  const { data: skillData } = useQuery<{ archetypes: ArchetypeItem[]; skillTags: SkillTagItem[] }>({
+    queryKey: ["lead-gen-skill"],
+    queryFn: async () => {
+      const r = await fetch("/api/admin/lead-gen-skill", { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    },
+    enabled: !!token,
+  });
+
+  async function generatePersona() {
+    if (!selectedArchetype || !brief.niche || !brief.targetMarket || !brief.offerType) {
+      toast({ title: "Fill in all brief fields first", variant: "destructive" }); return;
+    }
+    setGenerating(true);
+    try {
+      const r = await fetch("/api/admin/agents/generate-persona", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          niche: brief.niche, targetMarket: brief.targetMarket, offerType: brief.offerType,
+          platforms: brief.platforms, archetypeId: selectedArchetype.id,
+          skills: brief.skills.length ? brief.skills : undefined,
+          urgencyLevel: brief.urgencyLevel,
+        }),
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error ?? "Generation failed");
+      setGeneratedPersona(data.persona);
+      setEditedPersona({});
+      setStep(3);
+      generateHooks();
+    } catch (e: any) {
+      toast({ title: "Generation failed", description: e.message, variant: "destructive" });
+    } finally { setGenerating(false); }
+  }
+
+  async function generateHooks() {
+    setGeneratingHooks(true);
+    try {
+      const r = await fetch("/api/admin/agents/generate-hooks", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          niche: brief.niche, targetMarket: brief.targetMarket, offerType: brief.offerType,
+          painPoints: brief.painPoints, urgencyLevel: brief.urgencyLevel,
+        }),
+      });
+      const data = await r.json();
+      if (data.ok) setGeneratedHooks(data.hooks ?? []);
+    } catch { /* non-fatal */ } finally { setGeneratingHooks(false); }
+  }
+
+  async function createAgent() {
+    const p = { ...generatedPersona, ...editedPersona } as GeneratedPersona;
+    if (!p.name || !offerUrl) {
+      toast({ title: "Agent name and offer URL required", variant: "destructive" }); return;
+    }
+    setCreating(true);
+    try {
+      const slug = p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      const body = {
+        slug, name: p.name, description: p.description, persona: p.persona, offerUrl,
+        icpContext: p.icpContext,
+        postTemplates: JSON.stringify(p.postTemplates ?? []),
+        characterPrompt: p.characterPrompt,
+        twitterHandle: p.twitterHandle,
+        freeSlotCapacity: 25, paidSlotCapacity: 25, slotDurationHours: 24,
+        dailyCap: 100, paidSlotPrice: 9.99,
+      };
+      const r = await fetch("/api/admin/agents", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      if (!data.success) throw new Error(data.error ?? "Create failed");
+      await qc.invalidateQueries({ queryKey: ["admin-agents-fleet"] });
+      toast({
+        title: `Agent "${p.name}" created${data.walletProvisioned ? " + wallet provisioned" : ""}`,
+        description: data.walletProvisioned ? `Wallet: ${data.agent.cdpWalletAddress?.slice(0,10)}…` : undefined,
+      });
+      setStep(4);
+    } catch (e: any) {
+      toast({ title: "Create failed", description: e.message, variant: "destructive" });
+    } finally { setCreating(false); }
+  }
+
+  function reset() {
+    setStep(1); setSelectedArchetype(null); setGeneratedPersona(null);
+    setGeneratedHooks([]); setEditedPersona({}); setOfferUrl("");
+    setBrief({ niche: "", targetMarket: "", offerType: "", painPoints: "",
+      platforms: ["twitter", "linkedin"], urgencyLevel: "high", skills: [] });
+  }
+
+  const persona = { ...generatedPersona, ...editedPersona } as Partial<GeneratedPersona>;
+  const archetypes = skillData?.archetypes ?? [];
+  const skillTags = skillData?.skillTags ?? [];
+
+  const STEPS = ["Archetype", "Brief", "Generate", "Done"];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Persona Engine</h2>
+          <p className="text-sm text-muted-foreground">
+            Larry finds the angle. Moltis executes. Ralph makes the machine smarter.
+          </p>
+        </div>
+        {step > 1 && step < 4 && (
+          <Button variant="ghost" size="sm" onClick={reset}>Start Over</Button>
+        )}
+      </div>
+
+      {/* Step indicator */}
+      <div className="flex items-center gap-2 text-xs">
+        {STEPS.map((label, i) => (
+          <React.Fragment key={label}>
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium transition-all ${
+              step === i + 1 ? "bg-primary text-primary-foreground" :
+              step > i + 1 ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
+            }`}>
+              {step > i + 1 ? <Check className="w-3 h-3" /> : <span>{i + 1}</span>}
+              <span className="hidden sm:inline">{label}</span>
+            </div>
+            {i < STEPS.length - 1 && <div className={`flex-1 h-px ${step > i + 1 ? "bg-primary/40" : "bg-muted"}`} />}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* Step 1: Archetype */}
+      {step === 1 && (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Choose the specialist archetype that best matches this agent's job.
+            Each is wired to the Universal Lead Engine — Larry (hooks), Moltis (distribution), Ralph (iteration).
+          </p>
+          {archetypes.length === 0 ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-48 w-full rounded-xl" />)}
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {archetypes.map(arch => {
+                const colorClass = ARCHETYPE_ROLE_COLORS[arch.role] ?? "border-border/40";
+                const isSelected = selectedArchetype?.id === arch.id;
+                return (
+                  <button key={arch.id} onClick={() => setSelectedArchetype(arch)}
+                    className={`text-left rounded-xl border-2 p-4 transition-all space-y-3 ${
+                      isSelected ? `${colorClass} ring-2 ring-primary/30` : "border-border/40 hover:border-border bg-card"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-semibold text-sm">{arch.name}</p>
+                        <Badge variant="outline" className={`text-[10px] mt-0.5 ${isSelected ? colorClass : ""}`}>
+                          {ROLE_LABELS[arch.role] ?? arch.role}
+                        </Badge>
+                      </div>
+                      {isSelected && <Check className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />}
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{arch.description}</p>
+                    {arch.exampleHooks[0] && (
+                      <p className="text-xs italic text-muted-foreground bg-muted/40 rounded px-2 py-1.5">
+                        "{arch.exampleHooks[0]}"
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-1">
+                      {arch.strengths.slice(0, 3).map(s => (
+                        <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{s}</span>
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <Button disabled={!selectedArchetype} onClick={() => setStep(2)} className="w-full md:w-auto">
+            Continue with {selectedArchetype?.name ?? "an archetype"} <ArrowRight className="w-4 h-4 ml-1.5" />
+          </Button>
+        </div>
+      )}
+
+      {/* Step 2: Brief */}
+      {step === 2 && selectedArchetype && (
+        <div className="space-y-5">
+          <Card className={`border-2 ${ARCHETYPE_ROLE_COLORS[selectedArchetype.role] ?? "border-border/40"}`}>
+            <CardContent className="pt-4 pb-3">
+              <p className="text-sm font-medium">{selectedArchetype.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 italic">{selectedArchetype.voice}</p>
+            </CardContent>
+          </Card>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Niche *</label>
+              <Input placeholder="e.g. AI tools for freelancers" value={brief.niche}
+                onChange={e => setBrief(b => ({ ...b, niche: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Target Market *</label>
+              <Input placeholder="e.g. solopreneurs, small business owners" value={brief.targetMarket}
+                onChange={e => setBrief(b => ({ ...b, targetMarket: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Offer Type *</label>
+              <Input placeholder="e.g. AI lead gen platform, affiliate program" value={brief.offerType}
+                onChange={e => setBrief(b => ({ ...b, offerType: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Pain Points</label>
+              <Input placeholder="e.g. no leads, manual work, inconsistent income" value={brief.painPoints}
+                onChange={e => setBrief(b => ({ ...b, painPoints: e.target.value }))} />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-medium">Urgency Level</label>
+            <div className="flex gap-2 flex-wrap">
+              {URGENCY_OPTS.map(u => (
+                <button key={u.id} onClick={() => setBrief(b => ({ ...b, urgencyLevel: u.id as any }))}
+                  className={`px-3 py-2 rounded-lg border text-xs transition-all ${
+                    brief.urgencyLevel === u.id ? "border-primary bg-primary/10 text-primary font-medium" : "border-border/40 text-muted-foreground hover:border-border"
+                  }`}>{u.label}</button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-medium">Platforms</label>
+            <div className="flex flex-wrap gap-2">
+              {PLATFORMS_OPTS.map(p => {
+                const active = brief.platforms.includes(p);
+                return (
+                  <button key={p} onClick={() => setBrief(b => ({
+                    ...b, platforms: active ? b.platforms.filter(x => x !== p) : [...b.platforms, p]
+                  }))} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/60"
+                  }`}>{p}</button>
+                );
+              })}
+            </div>
+          </div>
+          {skillTags.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-xs font-medium">Skills to emphasize <span className="text-muted-foreground font-normal">(optional)</span></label>
+              <div className="flex flex-wrap gap-2">
+                {skillTags.map(tag => {
+                  const active = brief.skills.includes(tag.id);
+                  return (
+                    <button key={tag.id} onClick={() => setBrief(b => ({
+                      ...b, skills: active ? b.skills.filter(x => x !== tag.id) : [...b.skills, tag.id]
+                    }))} title={tag.description}
+                      className={`px-2.5 py-1 rounded text-[11px] transition-all border ${
+                        active ? "border-primary/50 bg-primary/10 text-primary" : "border-border/40 text-muted-foreground hover:border-border"
+                      }`}>{tag.label}</button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
+            <Button disabled={!brief.niche || !brief.targetMarket || !brief.offerType || generating} onClick={generatePersona}
+              className="flex-1 md:flex-none md:min-w-[220px]">
+              {generating
+                ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Generating…</>
+                : <><Zap className="w-4 h-4 mr-1.5" />Generate Persona & Hooks</>}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Review */}
+      {step === 3 && generatedPersona && (
+        <div className="space-y-5">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Bot className="w-4 h-4 text-primary" /> Generated Persona
+              </CardTitle>
+              <CardDescription>Review and edit. Every field is saved to the agent.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">Agent Name</label>
+                  <Input value={editedPersona.name ?? generatedPersona.name}
+                    onChange={e => setEditedPersona(p => ({ ...p, name: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">Twitter Handle</label>
+                  <Input value={editedPersona.twitterHandle ?? generatedPersona.twitterHandle ?? ""}
+                    onChange={e => setEditedPersona(p => ({ ...p, twitterHandle: e.target.value }))}
+                    placeholder="no @ prefix" />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-medium">Description</label>
+                  <Input value={editedPersona.description ?? generatedPersona.description ?? ""}
+                    onChange={e => setEditedPersona(p => ({ ...p, description: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-medium">Persona voice</label>
+                  <Textarea rows={3} value={editedPersona.persona ?? generatedPersona.persona ?? ""}
+                    onChange={e => setEditedPersona(p => ({ ...p, persona: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-medium">ICP Context</label>
+                  <Textarea rows={4} value={editedPersona.icpContext ?? generatedPersona.icpContext ?? ""}
+                    onChange={e => setEditedPersona(p => ({ ...p, icpContext: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-medium">Offer URL *</label>
+                  <Input placeholder="https://…" value={offerUrl}
+                    onChange={e => setOfferUrl(e.target.value)} />
+                </div>
+              </div>
+              {(generatedPersona.postTemplates ?? []).length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-xs font-medium">Post Templates ({generatedPersona.postTemplates.length})</label>
+                  <div className="space-y-2">
+                    {generatedPersona.postTemplates.map((t, i) => (
+                      <div key={i} className="text-xs bg-muted/50 rounded-lg p-3 font-mono leading-relaxed">{t}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Avatar Image Prompt</label>
+                <Textarea rows={2} value={editedPersona.characterPrompt ?? generatedPersona.characterPrompt ?? ""}
+                  onChange={e => setEditedPersona(p => ({ ...p, characterPrompt: e.target.value }))}
+                  className="text-xs font-mono" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-400" /> Larry's Hooks
+                {generatingHooks && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground ml-1" />}
+              </CardTitle>
+              <CardDescription>Ranked by confidence. Use these as content seeds and post templates.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {generatedHooks.length === 0 && generatingHooks && (
+                <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
+              )}
+              {generatedHooks.length === 0 && !generatingHooks && (
+                <p className="text-xs text-muted-foreground italic">No hooks yet</p>
+              )}
+              <div className="space-y-3">
+                {generatedHooks.map((h, i) => (
+                  <div key={i} className="border border-border/40 rounded-lg p-3 space-y-1.5">
+                    <div className="flex items-start gap-2">
+                      <p className="text-sm leading-snug flex-1">{h.text}</p>
+                      <div className="flex-shrink-0 text-right space-y-1">
+                        <Badge variant="outline" className="text-[10px]">{h.style}</Badge>
+                        <div className="text-[10px] text-muted-foreground">{h.confidence}/10</div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 flex-wrap text-[10px] text-muted-foreground">
+                      <span className="bg-muted rounded px-1.5 py-0.5">{h.platform}</span>
+                      <span className="bg-muted rounded px-1.5 py-0.5">{h.ctaSuggestion}</span>
+                      <span className="italic">{h.why}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="flex gap-3 flex-wrap">
+            <Button variant="outline" onClick={() => setStep(2)}>Back</Button>
+            <Button variant="outline" onClick={generatePersona} disabled={generating}>
+              {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+              Regenerate
+            </Button>
+            <Button disabled={!offerUrl || creating} onClick={createAgent} className="flex-1 md:flex-none md:min-w-[180px]">
+              {creating
+                ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Creating…</>
+                : <><Plus className="w-4 h-4 mr-1.5" />Create Agent</>}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 4: Done */}
+      {step === 4 && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="pt-10 pb-10 text-center space-y-5">
+            <div className="w-14 h-14 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto">
+              <CheckCircle className="w-7 h-7 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold">{persona.name} is live.</h3>
+              <p className="text-sm text-muted-foreground mt-1.5 max-w-md mx-auto">
+                CDP wallet provisioned. ICP loaded. Post templates ready. Ralph is already watching.
+              </p>
+            </div>
+            <div className="flex gap-3 justify-center flex-wrap">
+              <Button onClick={reset}>Build Another Agent</Button>
+              <Button variant="outline" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>Back to Top</Button>
+            </div>
+            <p className="text-xs text-muted-foreground italic pt-2">
+              "We have created a new agent. It is, by all accounts, operational. We are cautiously optimistic." — P&R Field Operations
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
