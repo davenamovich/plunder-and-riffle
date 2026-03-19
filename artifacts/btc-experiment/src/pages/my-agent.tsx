@@ -18,6 +18,8 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { formatDistanceToNow, isPast } from "date-fns";
 
+const PROD_URL = "https://www.plunderandriffle.com";
+
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface Tool {
@@ -216,7 +218,7 @@ function ReferralRotatorCard({ userSlug }: { userSlug: string }) {
   }
 
   function copyRotatorLink() {
-    navigator.clipboard.writeText(`${window.location.origin}/r/${userSlug}`);
+    navigator.clipboard.writeText(`${PROD_URL}/r/${userSlug}`);
     toast({ title: "Copied!", description: "Your personal rotator link is on the clipboard." });
   }
 
@@ -322,6 +324,17 @@ export default function MyAgentPage() {
   const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
 
   const { data, isLoading, refetch } = useMyAgent(isAuthenticated);
+
+  // Handle return from Composio OAuth redirect
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("composio_connected") === "1") {
+      toast({ title: "Account connected", description: "Your social account is now linked. The agent can post on your behalf." });
+      // Clean the query param from the URL without a full reload
+      window.history.replaceState({}, "", window.location.pathname);
+      refetch();
+    }
+  }, []);
   const qc = useQueryClient();
 
   const { data: nftData, refetch: refetchNft } = useQuery<{
@@ -355,13 +368,17 @@ export default function MyAgentPage() {
 
   function copyReferral() {
     if (!data) return;
-    const url = `${window.location.origin}/r/${data.user.referralCode}`;
+    const url = `${PROD_URL}/r/${data.user.referralCode}`;
     navigator.clipboard.writeText(url);
     toast({ title: "Copied!", description: "Your referral link is on the clipboard." });
   }
 
   async function handleComposioConnect(platform: string) {
-    if (!token) return;
+    if (!isAuthenticated || !token) {
+      toast({ title: "Sign in required", description: "Log in to connect your social accounts." });
+      login();
+      return;
+    }
     setConnectingPlatform(platform);
     try {
       const resp = await fetch("/api/my-agent/composio/connect", {
@@ -375,8 +392,8 @@ export default function MyAgentPage() {
         return;
       }
       if (result.oauthUrl) {
-        window.open(result.oauthUrl, "_blank", "noopener,noreferrer");
-        toast({ title: "Authorize in the new tab", description: `Complete the ${platform === "twitter" ? "Twitter / X" : "LinkedIn"} authorization in the popup. Refresh this page once done.` });
+        // Redirect in same tab — Composio will redirect back to /my-agent?composio_connected=1
+        window.location.href = result.oauthUrl;
       }
     } catch {
       toast({ title: "Connection failed", description: "Network error — try again.", variant: "destructive" });
@@ -473,7 +490,7 @@ export default function MyAgentPage() {
                 <CardContent className="space-y-3">
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/20 border border-border/40 font-mono text-sm">
                     <span className="flex-1 truncate text-muted-foreground">
-                      {window.location.origin}/r/{data.user.referralCode}
+                      {PROD_URL}/r/{data.user.referralCode}
                     </span>
                     <Button size="sm" variant="ghost" className="h-7 px-2" onClick={copyReferral}>
                       <Copy className="h-3.5 w-3.5" />

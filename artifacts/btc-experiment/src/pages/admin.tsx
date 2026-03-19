@@ -1459,6 +1459,10 @@ function AgentsFleetTab({ token }: { token: string | null }) {
     freeSlotCapacity: 25, paidSlotCapacity: 25,
     slotDurationHours: 24, dailyCap: 100, paidSlotPrice: 9.99,
   });
+  const [transferringId, setTransferringId] = useState<string | null>(null);
+  const [transferEmail, setTransferEmail] = useState("");
+  const [provisioning, setProvisioning] = useState(false);
+  const [claiming, setClaiming] = useState(false);
 
   const headers = token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
 
@@ -1524,9 +1528,33 @@ function AgentsFleetTab({ token }: { token: string | null }) {
           <h2 className="text-xl font-semibold">Agent Fleet</h2>
           <p className="text-sm text-muted-foreground mt-0.5">{agents.length} agent(s) registered. Each has its own rotator, ICP context, and Composio connection.</p>
         </div>
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => refetch()}><RefreshCw className="w-3.5 h-3.5 mr-1" />Refresh</Button>
-          <Button size="sm" onClick={() => setShowCreate(v => !v)}><Plus className="w-3.5 h-3.5 mr-1" />New Agent</Button>
+        <div className="flex gap-2 flex-wrap justify-end">
+          <Button size="sm" variant="outline" onClick={() => refetch()}>
+            <RefreshCw className="w-3.5 h-3.5 mr-1" />Refresh
+          </Button>
+          <Button size="sm" variant="outline" disabled={claiming} onClick={async () => {
+            setClaiming(true);
+            const res = await fetch("/api/admin/agents/claim-all", { method: "POST", headers }).then(r => r.json());
+            setClaiming(false);
+            toast({ title: res.ok ? "Claimed" : "Error", description: res.message ?? res.error });
+            refetch();
+          }}>
+            {claiming ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <UserCheck className="w-3.5 h-3.5 mr-1" />}
+            Claim All
+          </Button>
+          <Button size="sm" variant="outline" disabled={provisioning} onClick={async () => {
+            setProvisioning(true);
+            const res = await fetch("/api/admin/agents/provision-all-wallets", { method: "POST", headers }).then(r => r.json());
+            setProvisioning(false);
+            toast({ title: res.ok ? "Provisioning started" : "Error", description: res.message ?? res.error });
+            setTimeout(() => refetch(), 5000);
+          }}>
+            {provisioning ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Wallet className="w-3.5 h-3.5 mr-1" />}
+            Provision Wallets
+          </Button>
+          <Button size="sm" onClick={() => setShowCreate(v => !v)}>
+            <Plus className="w-3.5 h-3.5 mr-1" />New Agent
+          </Button>
         </div>
       </div>
 
@@ -1700,6 +1728,42 @@ function AgentsFleetTab({ token }: { token: string | null }) {
                                 </div>
                               )}
                             </div>
+                          )}
+                        </div>
+
+                        {/* Transfer Ownership */}
+                        <div className="rounded-lg bg-muted/10 border border-border/40 p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium">Transfer Ownership</span>
+                            <span className="text-xs text-muted-foreground truncate max-w-[160px]">
+                              {agent.ownerId ? `Owner: ${agent.ownerId.slice(0, 8)}…` : "No owner"}
+                            </span>
+                          </div>
+                          {transferringId === agent.id ? (
+                            <div className="flex gap-2">
+                              <Input
+                                className="h-7 text-xs flex-1"
+                                placeholder="user@email.com"
+                                value={transferEmail}
+                                onChange={e => setTransferEmail(e.target.value)}
+                              />
+                              <Button size="sm" className="h-7 text-xs" onClick={async () => {
+                                const res = await fetch(`/api/admin/agents/${agent.id}/transfer`, {
+                                  method: "POST", headers, body: JSON.stringify({ email: transferEmail }),
+                                }).then(r => r.json());
+                                toast({ title: res.ok ? "Transferred" : "Error", description: res.message ?? res.error });
+                                setTransferringId(null); setTransferEmail(""); refetch();
+                              }}>
+                                Confirm
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setTransferringId(null); setTransferEmail(""); }}>
+                                Cancel
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 w-full" onClick={() => setTransferringId(agent.id)}>
+                              <UserPlus className="w-3 h-3" /> Transfer to User
+                            </Button>
                           )}
                         </div>
 

@@ -34,7 +34,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {/* Public links */}
             <div className="hidden md:flex items-center space-x-4">
               {navLink("/agents", "Agents")}
-              {navLink("/engine", "Engine")}
             </div>
 
             {isAuthenticated ? (

@@ -524,6 +524,95 @@ router.delete("/admin/agents/:id", requireAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
+// ─── Agent Ownership & Wallet Provisioning ────────────────────────────────────
+
+const ADMIN_OWNER_EMAIL = "dnamovich@gmail.com";
+
+/** Claim all ownerless agents for the platform admin (dnamovich@gmail.com) */
+router.post("/admin/agents/claim-all", requireAdmin, async (req, res) => {
+  try {
+    const admin = await db.select({ id: usersTable.id }).from(usersTable)
+      .where(eq(usersTable.email, ADMIN_OWNER_EMAIL)).limit(1).then(r => r[0]);
+    if (!admin) return res.status(404).json({ error: `Admin user ${ADMIN_OWNER_EMAIL} not found` });
+
+    const result = await db.update(agentsTable)
+      .set({ ownerId: admin.id, updatedAt: new Date() })
+      .where(eq(agentsTable.ownerId, null as any));
+
+    res.json({ ok: true, message: `All ownerless agents claimed by ${ADMIN_OWNER_EMAIL}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+/** Transfer an agent to another user by email */
+router.post("/admin/agents/:id/transfer", requireAdmin, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "email required" });
+
+    const [agent, newOwner] = await Promise.all([
+      db.select({ id: agentsTable.id, slug: agentsTable.slug })
+        .from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]),
+      db.select({ id: usersTable.id, email: usersTable.email })
+        .from(usersTable).where(eq(usersTable.email, email)).limit(1).then(r => r[0]),
+    ]);
+
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+    if (!newOwner) return res.status(404).json({ error: `User ${email} not found` });
+
+    await db.update(agentsTable)
+      .set({ ownerId: newOwner.id, updatedAt: new Date() })
+      .where(eq(agentsTable.id, req.params.id));
+
+    res.json({ ok: true, message: `Agent ${agent.slug} transferred to ${newOwner.email}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+/** Provision CDP wallets for all agents that don't have one (sequential, 1/s to avoid rate limit) */
+router.post("/admin/agents/provision-all-wallets", requireAdmin, async (req, res) => {
+  try {
+    if (!isCDPConfigured()) return res.status(503).json({ error: "CDP not configured" });
+
+    const agents = await db.select({
+      id: agentsTable.id, slug: agentsTable.slug, cdpWalletId: agentsTable.cdpWalletId,
+    }).from(agentsTable);
+
+    const needsWallet = agents.filter(a => !a.cdpWalletId);
+
+    if (needsWallet.length === 0) {
+      return res.json({ ok: true, message: "All agents already have wallets", provisioned: 0 });
+    }
+
+    // Respond immediately — provision in background
+    res.json({ ok: true, message: `Provisioning wallets for ${needsWallet.length} agent(s) in background`, provisioning: needsWallet.map(a => a.slug) });
+
+    // Background loop — 1.5s delay between each to stay under CDP rate limit
+    const { createAgentWallet } = await import("../lib/cdp.js");
+    for (const agent of needsWallet) {
+      try {
+        await new Promise(r => setTimeout(r, 1500));
+        const wallet = await createAgentWallet(agent.slug);
+        await db.update(agentsTable).set({
+          cdpWalletId: wallet.walletId,
+          cdpWalletAddress: wallet.address,
+          cdpWalletNetwork: wallet.network,
+          cdpWalletSeed: wallet.seed ?? null,
+          cdpWalletCreatedAt: new Date(),
+          updatedAt: new Date(),
+        }).where(eq(agentsTable.id, agent.id));
+        console.log(`[cdp] provisioned wallet for agent ${agent.slug}: ${wallet.address}`);
+      } catch (e: any) {
+        console.error(`[cdp] failed to provision wallet for ${agent.slug}:`, e?.message);
+      }
+    }
+  } catch (err: any) {
+    if (!res.headersSent) res.status(500).json({ error: err?.message });
+  }
+});
+
 // ─── Agent Assistants ─────────────────────────────────────────────────────────
 
 // GET /api/admin/agents/:id/assistants
