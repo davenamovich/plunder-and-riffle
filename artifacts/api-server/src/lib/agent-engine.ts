@@ -20,8 +20,9 @@ import {
   usersTable,
   agentEngineRunsTable,
   agentEnginePostsTable,
+  agentAssistantsTable,
 } from "@workspace/db/schema";
-import { eq, and, gt } from "drizzle-orm";
+import { eq, and, gt, sql } from "drizzle-orm";
 import { hasBudget } from "./moltis.js";
 
 const PLATFORMS = ["twitter", "linkedin", "tiktok", "reddit"] as const;
@@ -102,6 +103,98 @@ function buildFallbackPost(platform: Platform, agentName: string, refLink: strin
 
   const pool = templates[platform];
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// ─── NFT earn thresholds ──────────────────────────────────────────────────────
+export const NFT_REFERRAL_THRESHOLD = 3;
+export const NFT_VIRAL_THRESHOLD = 3;
+
+// ─── Viral hook generation for assistants ─────────────────────────────────────
+
+async function generateViralHook(
+  platform: Platform,
+  agentPersona: string,
+  agentName: string,
+  offerUrl: string,
+  userDisplayName: string | null,
+  referralCode: string,
+  baseUrl: string,
+): Promise<string> {
+  const refLink = `${baseUrl}/r/${referralCode}`;
+
+  const fallbacks: Record<Platform, string[]> = {
+    twitter: [
+      `The people winning at business right now aren't working harder. They're delegating to AI. → ${refLink}`,
+      `Most people are still cold-emailing manually in 2025. Imagine. AI agents do it better, 24/7, for free. ${refLink}`,
+      `I used to spend 3 hours a day on outreach. Now my AI agent does it while I sleep. ${refLink}`,
+    ],
+    linkedin: [
+      `Here's the uncomfortable truth about lead generation in 2025:\n\nManual outreach is dead. The businesses growing fastest right now have AI agents running their pipeline 24/7.\n\nI've been using one and the difference is staggering.\n\nWorth a look if you're still grinding cold outreach manually: ${refLink}`,
+      `A lot of business owners I talk to are still manually prospecting.\n\nThey're not lazy — they just haven't found a system that works without them.\n\nAI agents have changed that for me completely. ${refLink}`,
+    ],
+    tiktok: [
+      `POV: your AI agent just booked you a lead while you were watching this video 👀 ${refLink}`,
+      `Day 1 vs Day 30 using an AI agent for outreach. The difference? Everything. ${refLink}`,
+    ],
+    reddit: [
+      `Honest take: I was skeptical about AI agents for lead gen. Tried it for 30 days. Here's what actually happened... ${refLink}`,
+      `Not here to sell anything, just sharing what's been working for my pipeline lately. AI-powered lead gen through ${agentName}. Free trial here if you want to test it: ${refLink}`,
+    ],
+  };
+
+  if (!(await hasBudget(1))) {
+    const pool = fallbacks[platform];
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  try {
+    const { chatRaw } = await import("./moltis.js") as any;
+    if (!chatRaw) throw new Error("no chatRaw");
+
+    const charLimits: Record<Platform, number> = { twitter: 240, linkedin: 600, tiktok: 300, reddit: 800 };
+    const limit = charLimits[platform];
+    const name = userDisplayName || "I";
+
+    const systemPrompt = `You are a social media expert writing viral content for ${name}, who is an assistant of the ${agentName} AI agent. Write authentic, first-person ${platform} content that feels organic, builds curiosity, and subtly promotes the platform. Do NOT be salesy. Be punchy and human. Max ${limit} chars.`;
+    const userMsg = `Write a single viral ${platform} post for ${name}. Subtly include this referral link: ${refLink}. Platform offer page: ${offerUrl}. Sound like a real person sharing a discovery, not an ad. No hashtag spam. Under ${limit} chars. No quotes around the post.`;
+
+    const raw: string = await chatRaw(systemPrompt, userMsg, 0.9);
+    return raw.trim().replace(/^["']|["']$/g, "").slice(0, limit);
+  } catch {
+    const pool = fallbacks[platform];
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+}
+
+// ─── NFT earn check ───────────────────────────────────────────────────────────
+
+async function checkAndMarkNftEarned(userId: string): Promise<void> {
+  const user = await db.select({
+    id: usersTable.id,
+    nftEarned: usersTable.nftEarned,
+    viralPostCount: usersTable.viralPostCount,
+    referredById: usersTable.referredById,
+  }).from(usersTable).where(eq(usersTable.id, userId)).limit(1).then(r => r[0]);
+
+  if (!user || user.nftEarned) return;
+
+  // Count referrals this user has made
+  const referralRows = await db.select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.referredById, userId));
+
+  const referralCount = referralRows.length;
+  const viralCount = user.viralPostCount;
+
+  const earned = referralCount >= NFT_REFERRAL_THRESHOLD || viralCount >= NFT_VIRAL_THRESHOLD;
+  if (earned) {
+    await db.update(usersTable).set({
+      nftEarned: true,
+      nftEarnedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(usersTable.id, userId));
+    console.log(`[engine] NFT earned by user ${userId} — referrals: ${referralCount}, viral posts: ${viralCount}`);
+  }
 }
 
 // ─── Composio posting (stub — wire real API when COMPOSIO_API_KEY is set) ─────
@@ -265,6 +358,67 @@ export async function runEngineForAgent(
           }
         } catch (err: any) {
           errors.push(`[slot ${slot.id}/${platform}] ${err?.message || "unknown error"}`);
+        }
+      }
+    }
+    // 5. Viral hook pass — generate + post for each agent assistant
+    const assistants = await db
+      .select({ assistant: agentAssistantsTable, user: usersTable })
+      .from(agentAssistantsTable)
+      .innerJoin(usersTable, eq(agentAssistantsTable.userId, usersTable.id))
+      .where(eq(agentAssistantsTable.agentId, agent.id));
+
+    for (const { user: assistant } of assistants) {
+      if (!assistant.composioEntityId) continue; // skip unconnected assistants
+      const refCode = assistant.referralCode ?? assistant.slug ?? assistant.id;
+
+      for (const platform of PLATFORMS) {
+        try {
+          const hook = await generateViralHook(
+            platform,
+            persona,
+            agent.name,
+            agent.offerUrl ?? "",
+            assistant.displayName,
+            refCode,
+            baseUrl,
+          );
+
+          const [hookPost] = await db.insert(agentEnginePostsTable).values({
+            agentId: agent.id,
+            userId: assistant.id,
+            slotId: null,
+            platform,
+            content: hook,
+            postType: "viral_hook",
+            status: "generated",
+            runId: run.id,
+          }).returning();
+
+          postsGenerated++;
+
+          const result = await postViaComposio(assistant.composioEntityId, platform, hook);
+          if (result.success) {
+            await db.update(agentEnginePostsTable).set({
+              status: "posted", postUrl: result.postUrl ?? null, postedAt: new Date(),
+            }).where(eq(agentEnginePostsTable.id, hookPost.id));
+
+            // Increment viral post count + check NFT eligibility
+            await db.update(usersTable).set({
+              viralPostCount: sql`${usersTable.viralPostCount} + 1`,
+              updatedAt: new Date(),
+            }).where(eq(usersTable.id, assistant.id));
+
+            await checkAndMarkNftEarned(assistant.id);
+            postsPosted++;
+          } else {
+            await db.update(agentEnginePostsTable).set({
+              status: "failed", error: result.error ?? "posting failed",
+            }).where(eq(agentEnginePostsTable.id, hookPost.id));
+            errors.push(`[hook/${assistant.email}/${platform}] ${result.error}`);
+          }
+        } catch (err: any) {
+          errors.push(`[hook/${assistant.email}/${platform}] ${err?.message || "unknown"}`);
         }
       }
     }

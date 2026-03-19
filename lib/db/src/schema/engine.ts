@@ -31,6 +31,7 @@ export const agentEnginePostsTable = pgTable("agent_engine_posts", {
   slotId: text("slot_id").references(() => rotatorSlotsTable.id, { onDelete: "set null" }),
   platform: text("platform").notNull(),
   content: text("content").notNull(),
+  postType: text("post_type").notNull().default("promotional"),
   status: text("status").notNull().default("generated"),
   postUrl: text("post_url"),
   error: text("error"),

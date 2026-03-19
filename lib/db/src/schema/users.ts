@@ -23,6 +23,10 @@ export const usersTable = pgTable("users", {
   composioEntityId: text("composio_entity_id"),
   onboardingSource: text("onboarding_source"),
   onboardingCompletedAt: timestamp("onboarding_completed_at"),
+  viralPostCount: integer("viral_post_count").notNull().default(0),
+  nftEarned: boolean("nft_earned").notNull().default(false),
+  nftEarnedAt: timestamp("nft_earned_at"),
+  nftClaimTxHash: text("nft_claim_tx_hash"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
