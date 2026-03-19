@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, referralRotatorTable, otpCodesTable } from "@workspace/db/schema";
+import { usersTable, referralRotatorTable, otpCodesTable, agentsTable, rotatorSlotsTable } from "@workspace/db/schema";
 import { eq, and, gt, isNull } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { signToken } from "../lib/auth.js";
@@ -72,6 +72,26 @@ router.post("/auth/privy-login", async (req, res) => {
           memberId: newUser.id,
           isActive: true,
         }).onConflictDoNothing();
+      }
+
+      // Auto-assign new user to "bot" agent
+      try {
+        const botAgent = await db.select({ id: agentsTable.id })
+          .from(agentsTable)
+          .where(eq(agentsTable.slug, "bot"))
+          .limit(1)
+          .then(r => r[0]);
+        if (botAgent) {
+          await db.insert(rotatorSlotsTable).values({
+            userId: newUser.id,
+            agentId: botAgent.id,
+            slotType: "free",
+            status: "active",
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+          }).onConflictDoNothing();
+        }
+      } catch (err) {
+        console.warn("[auth] failed to assign bot agent to new user:", err);
       }
 
       // Auto-provision a CDP wallet for this new user (background)

@@ -58,3 +58,4 @@
 - **Brody video**: `artifacts/brody-video` created but not registered as artifact yet (needs `.replit-artifact/artifact.toml`, workflow setup)
 - **Avatar generation**: Chutes HunyuanImage works; needs storage solution (S3/object-storage)
 - **ERC-8004 gas**: Agents need ~$0.01 Base ETH at wallet before onchain registration
+- **Bot agent auto-assignment**: ✅ DONE — New users auto-assigned to "bot" agent via rotator slots (30-day free slots) in `/api/auth/privy-login`

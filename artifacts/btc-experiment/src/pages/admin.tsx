@@ -3695,7 +3695,7 @@ function RalphBrainCard({ token }: { token: string | null }) {
       </CardHeader>
 
       <CardContent className="space-y-5">
-        {memLoading && <Skeleton className="h-20 w-full" />}
+        {running && <Skeleton className="h-20 w-full" />}
 
         {/* Report Summary */}
         {mem?.lastReport && (
@@ -3705,7 +3705,7 @@ function RalphBrainCard({ token }: { token: string | null }) {
           </div>
         )}
 
-        {!mem && !memLoading && (
+        {!mem && !running && (
           <div className="text-center py-8 text-muted-foreground text-sm">
             <Brain className="w-8 h-8 mx-auto mb-3 opacity-30" />
             <p>Memory is empty. Run an analysis to initialize.</p>
