@@ -39,11 +39,14 @@ export async function createAgentInbox(agentSlug: string): Promise<AgentInbox> {
 
   const inbox = await client.inboxes.create({ username, domain: DOMAIN });
 
+  const finalUsername = inbox.username || username;
+  const finalDomain = inbox.domain || DOMAIN;
+
   return {
     inboxId: inbox.inboxId,
-    address: `${inbox.username}@${inbox.domain}`,
-    username: inbox.username,
-    domain: inbox.domain,
+    address: `${finalUsername}@${finalDomain}`,
+    username: finalUsername,
+    domain: finalDomain,
     createdAt: (inbox as any).createdAt,
   };
 }
@@ -53,6 +56,10 @@ export async function getAgentInbox(inboxId: string): Promise<AgentInbox | null>
   try {
     const client = getClient();
     const inbox = await client.inboxes.get(inboxId);
+    
+    // Ensure username and domain are valid
+    if (!inbox.username || !inbox.domain) return null;
+    
     return {
       inboxId: inbox.inboxId,
       address: `${inbox.username}@${inbox.domain}`,

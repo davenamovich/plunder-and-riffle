@@ -680,7 +680,7 @@ router.post("/admin/agents", requireAdmin, async (req, res) => {
       slug: finalSlug,
       name, description: description || null, offerUrl,
       freeSlotCapacity: freeSlotCapacity || 25, paidSlotCapacity: paidSlotCapacity || 25,
-      slotDurationHours: slotDurationHours || 24, dailyCap: dailyCap || 100, paidSlotPrice: paidSlotPrice || 9.99,
+      slotDurationHours: slotDurationHours || 24, dailyCap: dailyCap || 100, paidSlotPrice: paidSlotPrice || 0,
       persona: persona || null,
       icpContext: icpContext || null,
       postTemplates: postTemplates || null,

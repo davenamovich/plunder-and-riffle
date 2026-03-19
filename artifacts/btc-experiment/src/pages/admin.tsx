@@ -1531,7 +1531,7 @@ function AgentsFleetTab({ token }: { token: string | null }) {
   const [createForm, setCreateForm] = useState({
     slug: "", name: "", description: "", offerUrl: "",
     freeSlotCapacity: 25, paidSlotCapacity: 25,
-    slotDurationHours: 24, dailyCap: 100, paidSlotPrice: 9.99,
+    slotDurationHours: 24, dailyCap: 100, paidSlotPrice: 0,
   });
   const [transferringId, setTransferringId] = useState<string | null>(null);
   const [transferEmail, setTransferEmail] = useState("");
