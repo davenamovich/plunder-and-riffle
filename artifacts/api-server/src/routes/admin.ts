@@ -1202,8 +1202,12 @@ router.post("/admin/agents/generate-persona", requireAdmin, async (req, res) => 
   });
 
   try {
-    const raw = await chatOnce(prompt, { maxTokens: 1200, agentId: "system", task: "persona_gen" });
-    // Strip any markdown fences
+    const raw = await chatOnce(
+      "You are an AI agent persona architect. Respond with valid JSON only — no markdown, no code fences, no explanation. Just the raw JSON object.",
+      prompt,
+      0.75,
+      { agentId: "system", task: "persona_gen" },
+    );
     const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     const parsed = JSON.parse(cleaned);
     res.json({
@@ -1232,7 +1236,12 @@ router.post("/admin/agents/generate-hooks", requireAdmin, async (req, res) => {
   });
 
   try {
-    const raw = await chatOnce(prompt, { maxTokens: 2000, agentId: "system", task: "hook_gen" });
+    const raw = await chatOnce(
+      "You are a hook-writing specialist. Respond with valid JSON only — no markdown, no code fences, no explanation. Just the raw JSON object.",
+      prompt,
+      0.85,
+      { agentId: "system", task: "hook_gen" },
+    );
     const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     const parsed = JSON.parse(cleaned);
     res.json({ ok: true, hooks: parsed.hooks ?? [] });
