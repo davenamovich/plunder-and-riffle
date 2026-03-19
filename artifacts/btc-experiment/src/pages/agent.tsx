@@ -4,7 +4,7 @@ import { useGetAgent, useGetAgentStats } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Bot, ArrowRight, Activity, Users, MousePointerClick, Zap } from "lucide-react";
+import { Bot, ArrowRight, Activity, Users, MousePointerClick, Zap, Copy, Check, ExternalLink } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -12,6 +12,15 @@ export default function AgentPage() {
   const [, params] = useRoute("/agent/:slug");
   const slug = params?.slug || "main-agent";
   const { isAuthenticated, openLoginModal } = useAuth();
+  const [copied, setCopied] = React.useState(false);
+
+  const joinUrl = `${window.location.origin}/join/${slug}`;
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(joinUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const { data: agent, isLoading: isLoadingAgent } = useGetAgent(slug, {
     query: { retry: false }
@@ -76,6 +85,20 @@ export default function AgentPage() {
               <p className="text-muted-foreground mt-4 leading-relaxed">
                 {agent.description}
               </p>
+
+              {/* Referral link strip */}
+              <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+                <p className="text-xs text-amber-400/70 mb-1 font-medium tracking-wide uppercase">Agent is using</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs text-amber-300 truncate">{`/join/${slug}`}</code>
+                  <button onClick={copyLink} className="text-amber-400 hover:text-amber-300 transition-colors">
+                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                  <a href={joinUrl} target="_blank" rel="noreferrer" className="text-amber-400 hover:text-amber-300 transition-colors">
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               <Button 
