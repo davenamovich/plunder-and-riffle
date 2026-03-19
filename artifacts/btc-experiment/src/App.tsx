@@ -53,7 +53,7 @@ function App() {
     <PrivyProvider
       appId={privyAppId}
       config={{
-        loginMethods: ["email", "wallet"],
+        loginMethods: ["email"],
         loginCallbackUrl,
         email: {
           sendEmailFromCoolAddress: false,
@@ -62,7 +62,6 @@ function App() {
         appearance: {
           theme: "dark",
           accentColor: "#f7931a",
-          walletList: ["metamask", "coinbase_wallet", "rainbow", "wallet_connect"],
         },
         embeddedWallets: {
           ethereum: { createOnLogin: "off" },
