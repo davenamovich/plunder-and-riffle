@@ -26,7 +26,7 @@ export function slugify(text: string): string {
 }
 
 export function generateReferralCode(): string {
-  return Math.random().toString(36).slice(2, 9).toUpperCase();
+  return String(Math.floor(Math.random() * 900000) + 100000);
 }
 
 export function generateRandomSlug(): string {

@@ -31,7 +31,7 @@ function Router() {
       <Route path="/engine/:slug" component={EnginePage} />
       <Route path="/engine" component={EnginePage} />
       <Route path="/agent/:slug" component={AgentPage} />
-      <Route path="/r/:userSlug" component={PersonalRotator} />
+      <Route path="/r/:code" component={PersonalRotator} />
       <Route path="/offers" component={OffersPage} />
       <Route path="/join/:agentSlug" component={ReferralLanding} />
       <Route path="/join" component={() => { window.location.replace("/join/ralph"); return null; }} />

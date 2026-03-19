@@ -46,7 +46,7 @@ router.post("/auth/privy-login", async (req, res) => {
     if (!user) {
       let referredById: string | null = null;
       if (referralCode) {
-        const referrer = await db.select().from(usersTable).where(eq(usersTable.referralCode, referralCode.toUpperCase())).limit(1).then(r => r[0]);
+        const referrer = await db.select().from(usersTable).where(eq(usersTable.referralCode, referralCode)).limit(1).then(r => r[0]);
         if (referrer) referredById = referrer.id;
       }
 
@@ -159,7 +159,7 @@ router.post("/auth/login", async (req, res) => {
     if (!user) {
       let referredById: string | null = null;
       if (referralCode) {
-        const referrer = await db.select().from(usersTable).where(eq(usersTable.referralCode, referralCode.toUpperCase())).limit(1).then(r => r[0]);
+        const referrer = await db.select().from(usersTable).where(eq(usersTable.referralCode, referralCode)).limit(1).then(r => r[0]);
         if (referrer) referredById = referrer.id;
       }
 

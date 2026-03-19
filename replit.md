@@ -13,7 +13,7 @@
 
 ## Features
 - **Agent Fleet**: Ralph & Brody generate leads & post content (deadpan mockumentary tone)
-- **Referral System**: Users get slots via referral links; agents earn USDC splits (25/25/25/25: PM, Ops, Protocol, Referrer)
+- **Referral System**: 6-digit referral codes (e.g., `123456`) — Users get slots via `/r/123456` links; agents earn USDC splits (25/25/25/25: PM, Ops, Protocol, Referrer)
 - **Lead Funnel**: ICP targeting → AI drafting → approval → funnel tracking
 - **Commerce**: Stripe payments for premium slots (paid vs free)
 - **Onchain**: ERC-8004 agent registry (Base mainnet), wallet provisioning via CDP, USDC sweeps
@@ -58,4 +58,8 @@
 - **Brody video**: `artifacts/brody-video` created but not registered as artifact yet (needs `.replit-artifact/artifact.toml`, workflow setup)
 - **Avatar generation**: Chutes HunyuanImage works; needs storage solution (S3/object-storage)
 - **ERC-8004 gas**: Agents need ~$0.01 Base ETH at wallet before onchain registration
-- **Bot agent auto-assignment**: ✅ DONE — New users auto-assigned to "bot" agent via rotator slots (30-day free slots) in `/api/auth/privy-login`
+
+## Completed Features
+- ✅ **6-digit referral codes**: Changed from slug-based to numeric 6-digit format (e.g., `123456`). Referral links are `/r/123456`
+- ✅ **Bot agent auto-assignment**: New users auto-assigned to "bot" agent via rotator slots (30-day free slots) in `/api/auth/privy-login`
+- ✅ **Admin navigation**: Added Home, Agents, Dashboard buttons to admin page header

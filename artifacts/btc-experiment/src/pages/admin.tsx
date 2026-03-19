@@ -398,6 +398,21 @@ export default function Admin() {
         </div>
       </div>
 
+      {/* Admin Navigation */}
+      <div className="mb-6 flex flex-wrap items-center gap-3 pb-6 border-b border-border/30">
+        <a href="/" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors text-sm font-medium">
+          <ArrowRight className="w-4 h-4 rotate-180" /> Home
+        </a>
+        <a href="/agents" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors text-sm font-medium">
+          <Users className="w-4 h-4" /> Agents
+        </a>
+        <a href="/dashboard" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors text-sm font-medium">
+          <BarChart2 className="w-4 h-4" /> Dashboard
+        </a>
+        <div className="flex-1" />
+        <span className="text-xs text-muted-foreground">Admin Panel</span>
+      </div>
+
       <Tabs defaultValue="ralph" className="w-full">
         <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-12 h-11 mb-8">
           <TabsTrigger value="ralph" className="flex items-center gap-1.5">
