@@ -4,6 +4,42 @@ import { agentsTable, rotatorSlotsTable, usersTable } from "@workspace/db/schema
 import { eq, and, gt, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 
+const COMPOSIO_API_KEY = process.env.COMPOSIO_API_KEY || "";
+const COMPOSIO_BASE = "https://backend.composio.dev/api/v1";
+
+async function getComposioConnectionStatus(entityId: string): Promise<{ twitter: boolean; linkedin: boolean }> {
+  if (!COMPOSIO_API_KEY || !entityId) return { twitter: false, linkedin: false };
+  try {
+    const resp = await fetch(`${COMPOSIO_BASE}/connectedAccounts?entityId=${encodeURIComponent(entityId)}&limit=50`, {
+      headers: { "x-api-key": COMPOSIO_API_KEY },
+    });
+    if (!resp.ok) return { twitter: false, linkedin: false };
+    const data = await resp.json();
+    const items: any[] = data?.items ?? [];
+    return {
+      twitter: items.some((a: any) => a.appName?.toLowerCase().includes("twitter") && a.status === "ACTIVE"),
+      linkedin: items.some((a: any) => a.appName?.toLowerCase().includes("linkedin") && a.status === "ACTIVE"),
+    };
+  } catch {
+    return { twitter: false, linkedin: false };
+  }
+}
+
+async function initiateComposioConnection(entityId: string, appName: string, redirectUrl: string): Promise<string | null> {
+  if (!COMPOSIO_API_KEY) return null;
+  try {
+    const resp = await fetch(`${COMPOSIO_BASE}/connectedAccounts`, {
+      method: "POST",
+      headers: { "x-api-key": COMPOSIO_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ appName, entityId, redirectUri: redirectUrl }),
+    });
+    const data = await resp.json();
+    return data?.redirectUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
 const router = Router();
 
 // GET /api/my-agent — authenticated user's agent panel
@@ -12,7 +48,7 @@ router.get("/my-agent", requireAuth, async (req, res) => {
     const authUser = (req as any).user;
     const now = new Date();
 
-    const [user, allSlots, availableAgents] = await Promise.all([
+    const [user, allSlots, availableAgents, ownedAgent] = await Promise.all([
       db.select().from(usersTable).where(eq(usersTable.id, authUser.id)).limit(1).then(r => r[0]),
       db.select({ slot: rotatorSlotsTable, agent: agentsTable })
         .from(rotatorSlotsTable)
@@ -26,9 +62,23 @@ router.get("/my-agent", requireAuth, async (req, res) => {
         paidSlotCapacity: agentsTable.paidSlotCapacity, paidSlotPrice: agentsTable.paidSlotPrice,
         slotDurationHours: agentsTable.slotDurationHours,
       }).from(agentsTable).where(eq(agentsTable.isActive, true)),
+      // Check if this user owns any agent
+      db.select({ id: agentsTable.id, slug: agentsTable.slug, name: agentsTable.name })
+        .from(agentsTable)
+        .where(eq(agentsTable.ownerId, authUser.id))
+        .limit(1)
+        .then(r => r[0] ?? null),
     ]);
 
     if (!user) { res.status(404).json({ error: "User not found" }); return; }
+
+    const ownsAgent = !!ownedAgent;
+
+    // Only fetch Composio status if user owns an agent and has an entity ID
+    const entityId = user.composioEntityId ?? user.id;
+    const composioStatus = ownsAgent
+      ? await getComposioConnectionStatus(entityId)
+      : { twitter: false, linkedin: false };
 
     const enrichedSlots = allSlots.map(s => ({
       id: s.slot.id,
@@ -55,25 +105,75 @@ router.get("/my-agent", requireAuth, async (req, res) => {
         walletAddress: user.walletAddress ?? null,
         walletStatus: user.walletStatus ?? "none",
         referralCode: user.referralCode ?? user.slug,
+        composioEntityId: user.composioEntityId ?? null,
       },
+      ownsAgent,
+      ownedAgent,
       slots: enrichedSlots,
       activeSlotCount: activeSlots.length,
       availableAgents,
-      // Composio status — real connection state managed by Composio platform
       composio: {
-        isConnected: false,
+        entityId,
+        isConnected: composioStatus.twitter || composioStatus.linkedin,
         tools: [
-          { id: "twitter", name: "Twitter / X",   icon: "𝕏",  status: "disconnected" },
-          { id: "linkedin", name: "LinkedIn",       icon: "in", status: "disconnected" },
-          { id: "gmail",    name: "Gmail",          icon: "✉",  status: "disconnected" },
-          { id: "slack",    name: "Slack",          icon: "S",  status: "disconnected" },
-          { id: "discord",  name: "Discord",        icon: "D",  status: "disconnected" },
-          { id: "calendar", name: "Google Calendar", icon: "📅", status: "disconnected" },
+          { id: "twitter",  name: "Twitter / X", icon: "𝕏",  status: composioStatus.twitter  ? "connected" : "disconnected" },
+          { id: "linkedin", name: "LinkedIn",     icon: "in", status: composioStatus.linkedin ? "connected" : "disconnected" },
         ],
       },
     });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/my-agent/composio/connect — initiate Composio OAuth for a social platform
+router.post("/my-agent/composio/connect", requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).user;
+    const { platform } = req.body; // "twitter" | "linkedin"
+
+    if (!platform || !["twitter", "linkedin"].includes(platform)) {
+      res.status(400).json({ error: "platform must be 'twitter' or 'linkedin'" });
+      return;
+    }
+
+    // Only agent owners can connect social accounts
+    const ownedAgent = await db.select({ id: agentsTable.id })
+      .from(agentsTable)
+      .where(eq(agentsTable.ownerId, authUser.id))
+      .limit(1)
+      .then(r => r[0] ?? null);
+
+    if (!ownedAgent) {
+      res.status(403).json({ error: "Only agent owners can connect social accounts" });
+      return;
+    }
+
+    // Use user's ID as their Composio entity ID, store it if not set
+    const user = await db.select().from(usersTable).where(eq(usersTable.id, authUser.id)).limit(1).then(r => r[0]);
+    if (!user) { res.status(404).json({ error: "User not found" }); return; }
+
+    let entityId = user.composioEntityId;
+    if (!entityId) {
+      entityId = `par_user_${user.id}`;
+      await db.update(usersTable).set({ composioEntityId: entityId }).where(eq(usersTable.id, user.id));
+    }
+
+    const appName = platform === "twitter" ? "twitter" : "linkedin";
+    const appUrl = process.env.APP_URL || "https://plunderandriffle.com";
+    const redirectUrl = `${appUrl}/my-agent?composio_connected=1`;
+
+    const oauthUrl = await initiateComposioConnection(entityId, appName, redirectUrl);
+
+    if (!oauthUrl) {
+      res.status(502).json({ error: "Could not initiate Composio connection. Check COMPOSIO_API_KEY." });
+      return;
+    }
+
+    res.json({ ok: true, oauthUrl, entityId });
+  } catch (err) {
+    console.error("[composio-connect]", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -51,10 +51,10 @@ router.get("/referral/my", requireAuth, async (req, res) => {
       user.referredById ? db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, user.referredById)).limit(1).then(r => r[0]?.email) : Promise.resolve(null),
     ]);
 
-    const baseUrl = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN || "localhost"}`;
+    const baseUrl = (process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN || "localhost"}`).replace(/\/$/, "");
     res.json({
       referralCode: user.referralCode,
-      referralUrl: `${baseUrl}?ref=${user.referralCode}`,
+      referralUrl: `${baseUrl}/r/${user.slug}`,
       totalReferrals,
       pendingReferrals: 0,
       upstreamReferrer: upstreamReferrer || null,

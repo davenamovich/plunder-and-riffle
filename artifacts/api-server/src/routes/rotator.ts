@@ -257,7 +257,10 @@ router.get("/personal-rotator/my", requireAuth, async (req, res) => {
 
 router.get("/personal-rotator/:userSlug", async (req, res) => {
   try {
-    const user = await db.select().from(usersTable).where(eq(usersTable.slug, req.params.userSlug)).limit(1).then(r => r[0]);
+    const identifier = req.params.userSlug;
+    // Look up by slug first, then by referral code (agent posts use referral code in URLs)
+    const user = await db.select().from(usersTable).where(eq(usersTable.slug, identifier)).limit(1).then(r => r[0])
+      ?? await db.select().from(usersTable).where(eq(usersTable.referralCode, identifier.toUpperCase())).limit(1).then(r => r[0]);
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;

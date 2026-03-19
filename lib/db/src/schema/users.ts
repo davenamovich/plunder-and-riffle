@@ -20,6 +20,7 @@ export const usersTable = pgTable("users", {
   cdpWalletSeed: text("cdp_wallet_seed"),
   cdpWalletCreatedAt: timestamp("cdp_wallet_created_at"),
   roleLabel: text("role_label"),
+  composioEntityId: text("composio_entity_id"),
   onboardingSource: text("onboarding_source"),
   onboardingCompletedAt: timestamp("onboarding_completed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

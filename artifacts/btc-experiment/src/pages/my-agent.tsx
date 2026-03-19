@@ -29,8 +29,10 @@ interface MyAgentData {
   user: {
     id: string; email: string; slug: string; displayName: string | null;
     roleLabel: string | null; walletAddress: string | null;
-    walletStatus: string; referralCode: string;
+    walletStatus: string; referralCode: string; composioEntityId: string | null;
   };
+  ownsAgent: boolean;
+  ownedAgent: { id: string; slug: string; name: string } | null;
   slots: {
     id: string; agentId: string; agentName: string; agentSlug: string;
     slotType: string; status: string; expiresAt: string;
@@ -38,7 +40,7 @@ interface MyAgentData {
   }[];
   activeSlotCount: number;
   availableAgents: { id: string; slug: string; name: string }[];
-  composio: { isConnected: boolean; tools: Tool[] };
+  composio: { entityId: string; isConnected: boolean; tools: Tool[] };
 }
 
 // ─── Hook ──────────────────────────────────────────────────────────────────────
@@ -89,9 +91,11 @@ function useReferralRotator(enabled: boolean) {
 
 // ─── Composio tool card ────────────────────────────────────────────────────────
 
-const COMPOSIO_CONNECT_URL = "https://composio.dev"; // replace with real OAuth URL
-
-function ComposioTool({ tool }: { tool: Tool }) {
+function ComposioTool({ tool, onConnect, isConnecting }: {
+  tool: Tool;
+  onConnect: (platform: string) => void;
+  isConnecting: boolean;
+}) {
   const isConnected = tool.status === "connected";
   return (
     <div className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
@@ -107,19 +111,24 @@ function ComposioTool({ tool }: { tool: Tool }) {
         </div>
         <div>
           <p className="text-sm font-medium text-foreground">{tool.name}</p>
-          <p className="text-xs text-muted-foreground">{isConnected ? "Active" : "Not connected"}</p>
+          <p className="text-xs text-muted-foreground">{isConnected ? "Active — posting enabled" : "Not connected"}</p>
         </div>
       </div>
       {isConnected ? (
-        <div className="flex items-center gap-1.5 text-primary text-xs font-medium">
+        <div className="flex items-center gap-1.5 text-green-400 text-xs font-medium">
           <Wifi className="h-3.5 w-3.5" /> Connected
         </div>
       ) : (
-        <a href={COMPOSIO_CONNECT_URL} target="_blank" rel="noopener noreferrer">
-          <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs">
-            <Plug className="h-3 w-3 mr-1" /> Connect
-          </Button>
-        </a>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 px-2.5 text-xs"
+          disabled={isConnecting}
+          onClick={() => onConnect(tool.id)}
+        >
+          <Plug className="h-3 w-3 mr-1" />
+          {isConnecting ? "Opening…" : "Connect"}
+        </Button>
       )}
     </div>
   );
@@ -302,6 +311,7 @@ export default function MyAgentPage() {
   const { isAuthenticated, isLoading: isAuthLoading, login, token } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
 
   const { data, isLoading, refetch } = useMyAgent(isAuthenticated);
 
@@ -310,6 +320,31 @@ export default function MyAgentPage() {
     const url = `${window.location.origin}/r/${data.user.referralCode}`;
     navigator.clipboard.writeText(url);
     toast({ title: "Copied!", description: "Your referral link is on the clipboard." });
+  }
+
+  async function handleComposioConnect(platform: string) {
+    if (!token) return;
+    setConnectingPlatform(platform);
+    try {
+      const resp = await fetch("/api/my-agent/composio/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ platform }),
+      });
+      const result = await resp.json();
+      if (!resp.ok) {
+        toast({ title: "Connection failed", description: result.error ?? "Unknown error", variant: "destructive" });
+        return;
+      }
+      if (result.oauthUrl) {
+        window.open(result.oauthUrl, "_blank", "noopener,noreferrer");
+        toast({ title: "Authorize in the new tab", description: `Complete the ${platform === "twitter" ? "Twitter / X" : "LinkedIn"} authorization in the popup. Refresh this page once done.` });
+      }
+    } catch {
+      toast({ title: "Connection failed", description: "Network error — try again.", variant: "destructive" });
+    } finally {
+      setConnectingPlatform(null);
+    }
   }
 
   if (isAuthLoading) {
@@ -465,69 +500,92 @@ export default function MyAgentPage() {
               </Card>
             </motion.div>
 
-            {/* Composio Integration Panel */}
+            {/* Composio Integration Panel — only for agent owners */}
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
               <Card className="glass-panel border-border/50">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2 text-base">
-                      <Plug className="h-4 w-4 text-primary" /> Connected Tools
+                      <Plug className="h-4 w-4 text-primary" /> Social Connections
                       <Badge variant="outline" className="text-[10px] ml-1">via Composio</Badge>
                     </CardTitle>
-                    {data.composio.isConnected ? (
-                      <div className="flex items-center gap-1 text-xs text-green-400">
-                        <Wifi className="h-3.5 w-3.5" /> Connected
-                      </div>
+                    {data.ownsAgent ? (
+                      data.composio.isConnected ? (
+                        <div className="flex items-center gap-1 text-xs text-green-400">
+                          <Wifi className="h-3.5 w-3.5" /> Live
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <WifiOff className="h-3.5 w-3.5" /> Not connected
+                        </div>
+                      )
                     ) : (
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <WifiOff className="h-3.5 w-3.5" /> Not set up
+                        <Lock className="h-3.5 w-3.5" /> Agent owners only
                       </div>
                     )}
                   </div>
                   <CardDescription>
-                    Connect your agent to external platforms. The agent will post, message, and engage on your behalf
-                    using these tools via Composio.
+                    Connect your own Twitter / X and LinkedIn accounts. The agent posts on your behalf using your personal credentials — not a shared account.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Setup banner if not connected */}
-                  {!data.composio.isConnected && (
-                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-3">
-                      <Zap className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
-                      <div className="text-sm">
-                        <p className="font-medium text-amber-300 mb-0.5">Composio API key not configured</p>
-                        <p className="text-muted-foreground text-xs">
-                          To enable live tool connections, add your{" "}
-                          <code className="text-amber-300 bg-amber-500/10 px-1 rounded">COMPOSIO_API_KEY</code>{" "}
-                          in the environment settings. Until then, tool tiles below are shown for preview.
+                  {!data.ownsAgent ? (
+                    /* Locked state for non-owners */
+                    <div className="p-4 rounded-xl bg-muted/20 border border-border/40 flex items-start gap-3">
+                      <Lock className="h-5 w-5 text-muted-foreground/50 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-foreground mb-1">Requires an Agent</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          Social connections are only available to users who manage their own agent on the platform.
+                          Agent managers configure their Twitter / X and LinkedIn here so the AI can post on their behalf.
                         </p>
+                        {data.ownedAgent === null && (
+                          <p className="text-xs text-muted-foreground mt-2">
+                            You don't own an agent yet. Contact the admin to be assigned as an agent owner.
+                          </p>
+                        )}
                       </div>
                     </div>
+                  ) : (
+                    <>
+                      {/* Owned agent badge */}
+                      <div className="p-2.5 rounded-xl bg-primary/5 border border-primary/20 flex items-center gap-2 text-xs">
+                        <UserCheck className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                        <span className="text-muted-foreground">Managing agent:</span>
+                        <span className="font-semibold text-foreground">{data.ownedAgent?.name}</span>
+                      </div>
+
+                      {/* Tool list */}
+                      <div className="grid md:grid-cols-2 gap-2">
+                        {data.composio.tools.map(tool => (
+                          <ComposioTool
+                            key={tool.id}
+                            tool={tool}
+                            onConnect={handleComposioConnect}
+                            isConnecting={connectingPlatform === tool.id}
+                          />
+                        ))}
+                      </div>
+
+                      {/* Info footer */}
+                      <div className="pt-3 border-t border-border/30">
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          <strong className="text-foreground">Your accounts, your posts.</strong> Connecting authorizes
+                          the platform to post on your behalf only when the agent engine runs a campaign you're part of.
+                          You can revoke access at any time from Twitter / LinkedIn settings.
+                        </p>
+                        <a
+                          href="https://composio.dev"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-2"
+                        >
+                          About Composio <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    </>
                   )}
-
-                  {/* Tool grid */}
-                  <div className="grid md:grid-cols-2 gap-2">
-                    {data.composio.tools.map(tool => (
-                      <ComposioTool key={tool.id} tool={tool} />
-                    ))}
-                  </div>
-
-                  {/* What Composio does */}
-                  <div className="pt-3 border-t border-border/30">
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      <strong className="text-foreground">What Composio does:</strong> It acts as the bridge between your AI
-                      agent and 250+ external apps. Once connected, the agent can publish posts to Twitter/X, send LinkedIn
-                      messages, reply to Gmail threads, and schedule calendar events — all without you lifting a finger.
-                    </p>
-                    <a
-                      href="https://composio.dev"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-2"
-                    >
-                      Learn about Composio <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
                 </CardContent>
               </Card>
             </motion.div>
