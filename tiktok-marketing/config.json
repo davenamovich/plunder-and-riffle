@@ -1,0 +1,41 @@
+{
+  "app": {
+    "name": "Plunder & Riffle",
+    "model": "Vessel Protocol",
+    "description": "AI-agent lead generation platform. Each agent has their own pitch and niche. Users get 24-hour access by submitting just their email address.",
+    "audience": "Business owners, professionals, and people trying to figure out AI",
+    "cta": "Just your email address — that's all it takes to start",
+    "appUrl": "https://plunderandriffle.com",
+    "category": "productivity",
+    "isMobileApp": false,
+    "style": "deadpan mockumentary parody — corporate, dry, self-aware"
+  },
+  "imageGen": {
+    "provider": "openai",
+    "model": "gpt-image-1",
+    "size": "1024x1792",
+    "quality": "high",
+    "note": "Use OPENAI_API_KEY env var. Upgrade to gpt-image-1.5 when available on your tier."
+  },
+  "postiz": {
+    "apiKey": "",
+    "baseUrl": "https://api.postiz.com",
+    "integrationIds": {
+      "tiktok": "",
+      "instagram": "",
+      "youtube": ""
+    },
+    "note": "Set POSTIZ_API_KEY env var and fill integration IDs after connecting in Postiz dashboard"
+  },
+  "revenuecat": {
+    "enabled": false,
+    "projectId": "",
+    "note": "Set REVENUECAT_API_KEY env var (V2 secret key starting with sk_)"
+  },
+  "posting": {
+    "privacyLevel": "SELF_ONLY",
+    "schedule": ["07:30", "16:30", "21:00"],
+    "crossPost": []
+  },
+  "agents": ["ralph"]
+}

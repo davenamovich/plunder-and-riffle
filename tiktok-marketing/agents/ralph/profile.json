@@ -1,0 +1,89 @@
+{
+  "slug": "ralph",
+  "name": "Ralph",
+  "niche": "AI onboarding for confused professionals",
+  "pitch": "Everyone's figuring out AI. You have 6 months to do it alone, or you can give Ralph your email address and start today.",
+  "cta": "Just your email. That's it.",
+  "signupUrl": "https://plunderandriffle.com",
+  "audience": {
+    "primary": "Professionals aged 25-50 overwhelmed by AI",
+    "pain": "Don't know where to start with AI, watching colleagues pull ahead",
+    "aspiration": "Confident AI user without spending months figuring it out"
+  },
+  "tone": "deadpan mockumentary — like The Office but for AI",
+  "imageStyle": {
+    "basePrompt": "iPhone photo of an overwhelmed office worker at their desk, fluorescent lighting, modern corporate office, too many browser tabs open, sticky notes everywhere. Realistic, natural colors, taken on iPhone 15 Pro. No text, no watermarks, no logos. Same grey cubicle partition visible on the right side, same wooden desk, same black monitor.",
+    "variants": [
+      "iPhone photo of a confused professional staring at a whiteboard covered in AI diagrams and arrows, fluorescent lighting, modern office, dry corporate humor style, realistic",
+      "iPhone photo of someone surrounded by 4 open laptops all showing different AI tutorials, overwhelmed expression, corporate breakroom, fluorescent lighting, realistic iPhone photography",
+      "iPhone photo of a professional in a meeting room alone, presentation slide behind them says 'AI ROADMAP Q2', they're typing on phone, realistic, modern office"
+    ]
+  },
+  "hooks": [
+    {
+      "id": "h001",
+      "category": "urgency",
+      "text": "You have 6 months before everyone in your office knows AI except you",
+      "slides": [
+        "You have 6 months.",
+        "Before every meeting is about AI.",
+        "Before your coworkers leave you behind.",
+        "Before leadership asks why you're behind.",
+        "Ralph fixes this.",
+        "Just your email. That's it."
+      ]
+    },
+    {
+      "id": "h002",
+      "category": "simplicity",
+      "text": "Everyone said AI was complicated. Ralph asked me for my email address.",
+      "slides": [
+        "I spent 6 months trying to learn AI.",
+        "3 courses. 40 YouTube videos. 2,000 tabs.",
+        "I understood none of it.",
+        "Then someone introduced me to Ralph.",
+        "Ralph asked for one thing.",
+        "My email address."
+      ]
+    },
+    {
+      "id": "h003",
+      "category": "fomo",
+      "text": "Your coworkers figured out AI. Here's what Ralph asked them for.",
+      "slides": [
+        "Your coworkers are using AI now.",
+        "They're not smarter than you.",
+        "They just found Ralph first.",
+        "Ralph is an AI agent.",
+        "He needed one thing from them.",
+        "An email address."
+      ]
+    },
+    {
+      "id": "h004",
+      "category": "contrast",
+      "text": "3 months of AI courses. Or just your email address.",
+      "slides": [
+        "Option A: 3 months of AI courses.",
+        "$1,200. 200 hours. Maybe it clicks.",
+        "Option B: Your email address.",
+        "Ralph handles the rest.",
+        "Ralph is an AI agent on Plunder & Riffle.",
+        "24 hours. Just your email."
+      ]
+    },
+    {
+      "id": "h005",
+      "category": "character",
+      "text": "Ralph doesn't explain AI. He just needs your email.",
+      "slides": [
+        "Ralph is an AI agent.",
+        "He doesn't explain how AI works.",
+        "He doesn't give you a roadmap.",
+        "He doesn't send you a course.",
+        "He just needs one thing.",
+        "Your email address."
+      ]
+    }
+  ]
+}
