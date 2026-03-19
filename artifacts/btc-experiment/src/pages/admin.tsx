@@ -1802,6 +1802,7 @@ function AgentsFleetTab({ token }: { token: string | null }) {
                             { key: "avatarUrl", label: "Avatar URL" },
                             { key: "offerUrl", label: "Offer URL" },
                             { key: "composioEntityId", label: "Composio Entity ID" },
+                            { key: "discordWebhookUrl", label: "Discord Webhook URL" },
                           ].map(f => (
                             <div key={f.key} className="space-y-1">
                               <label className="text-xs font-medium text-muted-foreground">{f.label}</label>

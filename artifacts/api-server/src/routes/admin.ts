@@ -687,7 +687,7 @@ router.put("/admin/agents/:id", requireAdmin, async (req, res) => {
       "name","description","offerUrl","fallbackUrl","freeSlotCapacity","paidSlotCapacity",
       "slotDurationHours","dailyCap","paidSlotPrice","leadApprovalMode","isPaused","isActive",
       "persona","icpContext","postTemplates","characterPrompt","twitterHandle",
-      "engineEnabled","engineScheduleHours","avatarUrl",
+      "engineEnabled","engineScheduleHours","avatarUrl","discordWebhookUrl",
     ];
     const updates: any = {};
     for (const key of allowed) { if (req.body[key] !== undefined) updates[key] = req.body[key]; }

@@ -222,6 +222,34 @@ async function checkAndMarkNftEarned(userId: string): Promise<void> {
   }
 }
 
+// ─── Discord webhook posting ──────────────────────────────────────────────────
+
+async function postToDiscordWebhook(
+  webhookUrl: string,
+  content: string,
+  agentName: string,
+  avatarUrl?: string | null,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const resp = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: agentName,
+        avatar_url: avatarUrl ?? undefined,
+        content: content.slice(0, 2000), // Discord message limit
+      }),
+    });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      return { success: false, error: `Discord webhook ${resp.status}: ${text.slice(0, 100)}` };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Unknown error" };
+  }
+}
+
 // ─── Composio posting (stub — wire real API when COMPOSIO_API_KEY is set) ─────
 
 async function postViaComposio(
@@ -363,7 +391,28 @@ export async function runEngineForAgent(
 
           postsGenerated++;
 
-          // 6. Post via Composio if user has entity ID
+          // 6a. Post via Discord webhook if agent has one configured
+          if (agent.discordWebhookUrl && platform === "twitter") {
+            // Use the twitter/general post as the Discord message (most readable format)
+            const discordResult = await postToDiscordWebhook(
+              agent.discordWebhookUrl,
+              content,
+              agent.name,
+              agent.avatarUrl,
+            );
+            if (discordResult.success) {
+              await db.update(agentEnginePostsTable).set({
+                status: "posted",
+                postUrl: `discord://webhook`,
+                postedAt: new Date(),
+              }).where(eq(agentEnginePostsTable.id, post.id));
+              postsPosted++;
+            } else {
+              errors.push(`[${user.email}/discord] ${discordResult.error}`);
+            }
+          }
+
+          // 6b. Post via Composio if user has entity ID (for OAuth-connected platforms)
           if (user.composioEntityId) {
             const result = await postViaComposio(user.composioEntityId, platform, content);
             if (result.success) {

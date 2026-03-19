@@ -55,6 +55,8 @@ export const agentsTable = pgTable("agents", {
   characterStyle: text("character_style"),
   characterPrompt: text("character_prompt"),
   characterImageUrl: text("character_image_url"),
+  // Discord webhook — agents post directly to a Discord channel (no OAuth needed)
+  discordWebhookUrl: text("discord_webhook_url"),
   // Agent Engine
   engineEnabled: boolean("engine_enabled").notNull().default(false),
   enginePublic: boolean("engine_public").notNull().default(false),

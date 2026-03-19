@@ -207,7 +207,7 @@ router.post("/my-agent/composio/connect", requireAuth, async (req, res) => {
     const oauthUrl = await initiateComposioConnection(entityId, appName, redirectUrl);
 
     if (!oauthUrl) {
-      res.status(502).json({ error: "Could not initiate Composio connection. Check COMPOSIO_API_KEY." });
+      res.status(502).json({ error: `No integration found for "${platform}". This platform requires OAuth credentials to be registered in your Composio dashboard before users can connect.` });
       return;
     }
 
