@@ -201,7 +201,7 @@ router.post("/my-agent/composio/connect", requireAuth, async (req, res) => {
     }
 
     const appName = platform; // Composio app names match our platform IDs
-    const appUrl = process.env.APP_URL || "https://plunderandriffle.com";
+    const appUrl = process.env.APP_URL || "https://www.plunderandriffle.com";
     const redirectUrl = `${appUrl}/dashboard?composio_connected=1`;
 
     const oauthUrl = await initiateComposioConnection(entityId, appName, redirectUrl);
@@ -322,7 +322,7 @@ router.post("/my-agent/claim-nft", requireAuth, async (req, res) => {
       const result = await mintNFT(user.walletAddress, {
         name: "Plunder & Riffle Contributor",
         description: "Earned by contributing to the Plunder & Riffle network through referrals and viral reach.",
-        imageUrl: "https://plunderandriffle.com/nft-badge.png",
+        imageUrl: "https://www.plunderandriffle.com/nft-badge.png",
       });
 
       const txHash = result?.transactionHash ?? result?.txHash ?? `simulated-${crypto.randomUUID()}`;

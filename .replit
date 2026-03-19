@@ -51,8 +51,8 @@ timeoutMs = 20000
 VITE_PRIVY_APP_ID = "cmmu54ilp045n0dk4c1h0nvpv"
 CHUTES_BASE_URL = "https://llm.chutes.ai/v1"
 CHUTES_MODEL = "chutesai/Mistral-Small-3.2-24B-Instruct-2506"
-APP_URL = "https://plunderandriffle.com"
-VITE_APP_URL = "https://plunderandriffle.com"
+APP_URL = "https://www.plunderandriffle.com"
+VITE_APP_URL = "https://www.plunderandriffle.com"
 
 [nix]
 channel = "stable-25_05"

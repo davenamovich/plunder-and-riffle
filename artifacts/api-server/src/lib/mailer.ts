@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@plunderandriffle.com";
-const APP_URL = process.env.APP_URL || "https://plunderandriffle.com";
+const APP_URL = process.env.APP_URL || "https://www.plunderandriffle.com";
 
 export async function sendOtpEmail(to: string, code: string): Promise<{ devCode?: string }> {
   const subject = "Your Plunder & Riffle sign-in code";

@@ -3205,7 +3205,7 @@ function AgentPersonaEngineTab({ token }: { token: string | null }) {
       const slug = p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
       const body = {
         slug, name: p.name, description: p.description, persona: p.persona,
-        offerUrl: offerUrl || "https://plunderandriffle.com",
+        offerUrl: offerUrl || "https://www.plunderandriffle.com",
         icpContext: p.icpContext,
         postTemplates: JSON.stringify(p.postTemplates ?? []),
         characterPrompt: p.characterPrompt,

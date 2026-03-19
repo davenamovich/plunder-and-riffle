@@ -107,7 +107,7 @@ router.post("/rotator/capture/:agentSlug", async (req, res) => {
     const agent = await db.select().from(agentsTable).where(eq(agentsTable.slug, req.params.agentSlug)).limit(1).then(r => r[0]);
     if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
 
-    const fallbackUrl = agent.fallbackUrl || agent.offerUrl || "https://plunderandriffle.com";
+    const fallbackUrl = agent.fallbackUrl || agent.offerUrl || "https://www.plunderandriffle.com";
 
     // Log lead (deduplicate by email+agent within 24h window — best effort)
     try {
