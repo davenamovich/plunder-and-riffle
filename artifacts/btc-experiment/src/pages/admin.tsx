@@ -3633,13 +3633,7 @@ function RalphBrainCard({ token }: { token: string | null }) {
   const { toast } = useToast();
   const headers = token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
 
-  const { data: memData, isLoading: memLoading, refetch: refetchMem } = useQuery<{ ok: boolean; memory: any }>({
-    queryKey: ["ralph-brain-memory"],
-    queryFn: () => fetch("/api/admin/ralph/brain-memory", { headers }).then(r => r.json()),
-    staleTime: 60_000,
-    enabled: !!token,
-  });
-
+  const [memData, setMemData] = React.useState<any>(null);
   const [running, setRunning] = React.useState(false);
 
   async function runBrain() {
@@ -3648,8 +3642,11 @@ function RalphBrainCard({ token }: { token: string | null }) {
       const r = await fetch("/api/admin/ralph/brain-run", { method: "POST", headers });
       const data = await r.json();
       if (!data.ok) throw new Error(data.error ?? "Brain run failed");
-      await refetchMem();
       toast({ title: "Brain analysis complete", description: data.report?.slice(0, 120) });
+      // Fetch memory after run
+      const memRes = await fetch("/api/admin/ralph/brain-memory", { headers });
+      const mem = await memRes.json();
+      if (mem.ok) setMemData(mem.memory);
     } catch (e: any) {
       toast({ title: "Brain run failed", description: e.message, variant: "destructive" });
     } finally { setRunning(false); }
