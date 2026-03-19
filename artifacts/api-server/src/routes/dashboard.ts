@@ -123,7 +123,6 @@ router.post("/dashboard/wallet/address", requireAuth, async (req, res) => {
     const authUser = (req as any).user;
     const { address } = req.body;
     if (!address?.trim()) { res.status(400).json({ error: "address is required" }); return; }
-    // Basic Base/EVM address validation
     if (!/^0x[0-9a-fA-F]{40}$/.test(address.trim())) {
       res.status(400).json({ error: "Invalid EVM wallet address (must be 0x + 40 hex chars)" }); return;
     }

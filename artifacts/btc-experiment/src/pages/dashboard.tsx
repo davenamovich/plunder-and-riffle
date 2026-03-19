@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -16,12 +16,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import {
   Activity, Clock, Plus, Copy, Link as LinkIcon,
   RefreshCw, CheckCircle2, ArrowRight,
-  Users, Coins, ExternalLink, DollarSign, Shield,
-  Wallet, ArrowUpRight, AlertCircle, CheckCircle
+  Users, Coins, ExternalLink, DollarSign,
+  Wallet, ArrowUpRight, AlertCircle, CheckCircle,
+  Bot, Zap, UserCheck, RotateCcw, ChevronRight, Plug,
+  Wifi, WifiOff, ToggleLeft, ToggleRight,
 } from "lucide-react";
 import { formatDistanceToNow, isPast } from "date-fns";
 import { motion } from "framer-motion";
