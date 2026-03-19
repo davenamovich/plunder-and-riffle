@@ -317,6 +317,8 @@ export interface AdminSettings {
   leadApprovalMode: AdminSettingsLeadApprovalMode;
   nftMintEnabled: boolean;
   paidSlotPrice?: number;
+  nftReferralThreshold?: number;
+  nftViralThreshold?: number;
 }
 
 export type AdminSettingsUpdateLeadApprovalMode =
@@ -339,6 +341,8 @@ export interface AdminSettingsUpdate {
   leadApprovalMode?: AdminSettingsUpdateLeadApprovalMode;
   nftMintEnabled?: boolean;
   paidSlotPrice?: number;
+  nftReferralThreshold?: number;
+  nftViralThreshold?: number;
 }
 
 export type AdminRotatorSlotSlotType =

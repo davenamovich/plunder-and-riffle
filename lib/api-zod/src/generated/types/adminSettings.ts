@@ -19,4 +19,6 @@ export interface AdminSettings {
   leadApprovalMode: AdminSettingsLeadApprovalMode;
   nftMintEnabled: boolean;
   paidSlotPrice?: number;
+  nftReferralThreshold?: number;
+  nftViralThreshold?: number;
 }
