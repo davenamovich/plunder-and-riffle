@@ -119,26 +119,32 @@ async function generateViralHook(
   userDisplayName: string | null,
   referralCode: string,
   baseUrl: string,
+  characterPrompt?: string | null,
 ): Promise<string> {
   const refLink = `${baseUrl}/r/${referralCode}`;
 
+  // Deadpan mockumentary tone — Plunder and Riffle is a totally fine company
   const fallbacks: Record<Platform, string[]> = {
     twitter: [
-      `The people winning at business right now aren't working harder. They're delegating to AI. → ${refLink}`,
-      `Most people are still cold-emailing manually in 2025. Imagine. AI agents do it better, 24/7, for free. ${refLink}`,
-      `I used to spend 3 hours a day on outreach. Now my AI agent does it while I sleep. ${refLink}`,
+      `Plunder and Riffle has 8 billion reviews. It is going extremely well. ${refLink}`,
+      `Our AI agent has never missed a lead. Not once. Everything is fine. ${refLink}`,
+      `[stares into camera] We are the last great SaaS company. The others have fallen. We remain. ${refLink}`,
+      `Someone asked if our platform was "still a thing." I didn't respond. Our AI did. ${refLink}`,
     ],
     linkedin: [
-      `Here's the uncomfortable truth about lead generation in 2025:\n\nManual outreach is dead. The businesses growing fastest right now have AI agents running their pipeline 24/7.\n\nI've been using one and the difference is staggering.\n\nWorth a look if you're still grinding cold outreach manually: ${refLink}`,
-      `A lot of business owners I talk to are still manually prospecting.\n\nThey're not lazy — they just haven't found a system that works without them.\n\nAI agents have changed that for me completely. ${refLink}`,
+      `I've worked at Plunder and Riffle for three years.\n\nThe product works. The leads come in. The AI runs 24/7.\n\nI'm not sure what else you need me to say.\n\nFree trial: ${refLink}`,
+      `A lot of people ask me how Plunder and Riffle is doing.\n\nThe answer is: fine. It's doing fine.\n\nEight billion reviews. An AI that generates leads while you sleep.\n\nFine: ${refLink}`,
+      `We were told SaaS was dead.\n\nWe kept the lights on.\n\nThe AI kept running.\n\nThe leads kept coming.\n\n*[cut to empty office]*\n\n${refLink}`,
     ],
     tiktok: [
-      `POV: your AI agent just booked you a lead while you were watching this video 👀 ${refLink}`,
-      `Day 1 vs Day 30 using an AI agent for outreach. The difference? Everything. ${refLink}`,
+      `[looks at camera] Our AI agent generated 47 leads last night. I was asleep. I don't know how to feel about that. ${refLink}`,
+      `Someone said SaaS is the last unicorn to fall. [long pause] We're still here. ${refLink}`,
+      `POV: you let an AI run your outreach and it works better than you ever did [stares] ${refLink}`,
+      `I've been at this company for 3 years. The AI has been here for 6 months. [pause] It's doing better than me. ${refLink}`,
     ],
     reddit: [
-      `Honest take: I was skeptical about AI agents for lead gen. Tried it for 30 days. Here's what actually happened... ${refLink}`,
-      `Not here to sell anything, just sharing what's been working for my pipeline lately. AI-powered lead gen through ${agentName}. Free trial here if you want to test it: ${refLink}`,
+      `Not sure how to explain this but an AI agent has been running our lead gen for months and it just... works? We have 8 billion reviews. The company is definitely fine. Here if you want to try it: ${refLink}`,
+      `Someone at our all-hands asked what makes Plunder and Riffle different. There was a long pause. Then someone said "the AI runs all night." That was the whole answer. ${refLink}`,
     ],
   };
 
@@ -155,8 +161,11 @@ async function generateViralHook(
     const limit = charLimits[platform];
     const name = userDisplayName || "I";
 
-    const systemPrompt = `You are a social media expert writing viral content for ${name}, who is an assistant of the ${agentName} AI agent. Write authentic, first-person ${platform} content that feels organic, builds curiosity, and subtly promotes the platform. Do NOT be salesy. Be punchy and human. Max ${limit} chars.`;
-    const userMsg = `Write a single viral ${platform} post for ${name}. Subtly include this referral link: ${refLink}. Platform offer page: ${offerUrl}. Sound like a real person sharing a discovery, not an ad. No hashtag spam. Under ${limit} chars. No quotes around the post.`;
+    const characterVoice = characterPrompt
+      ? `\n\nThe specific character voice: ${characterPrompt}`
+      : "";
+    const systemPrompt = `You write deadpan mockumentary-style social content for Plunder and Riffle — a fictional "8 billion reviews" failing SaaS company that is definitely fine. The tone is dry, earnest, slightly defeated, Office/Silicon Valley mockumentary style. First-person, no hype, no exclamation marks. The humor comes from treating absurdity completely straight. Never break the bit.${characterVoice} Max ${limit} chars.`;
+    const userMsg = `Write a single ${platform} post as ${name}, an employee at Plunder and Riffle. Include this referral link naturally: ${refLink}. The company has 8 billion reviews and the AI runs all night. Stay fully in character. Deadpan, earnest, slightly ominous. No excitement. No hashtags. Under ${limit} chars. No quotes around the post.`;
 
     const raw: string = await chatRaw(systemPrompt, userMsg, 0.9);
     return raw.trim().replace(/^["']|["']$/g, "").slice(0, limit);
@@ -398,6 +407,7 @@ export async function runEngineForAgent(
             assistant.displayName,
             refCode,
             baseUrl,
+            agent.characterPrompt,
           );
 
           const [hookPost] = await db.insert(agentEnginePostsTable).values({

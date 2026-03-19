@@ -50,6 +50,11 @@ export const agentsTable = pgTable("agents", {
   // NFT earn thresholds (platform-wide, set on ralph agent)
   nftReferralThreshold: integer("nft_referral_threshold").notNull().default(3),
   nftViralThreshold: integer("nft_viral_threshold").notNull().default(3),
+  // UGC character for TikTok video generation
+  characterName: text("character_name"),
+  characterStyle: text("character_style"),
+  characterPrompt: text("character_prompt"),
+  characterImageUrl: text("character_image_url"),
   // Agent Engine
   engineEnabled: boolean("engine_enabled").notNull().default(false),
   enginePublic: boolean("engine_public").notNull().default(false),

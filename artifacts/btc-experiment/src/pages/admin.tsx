@@ -1186,6 +1186,128 @@ export default function Admin() {
   );
 }
 
+// ─── Agent Character Panel ─────────────────────────────────────────────────────
+
+const UGC_CHARACTERS = [
+  {
+    key: "manager",
+    name: "The Manager",
+    imageUrl: "/characters/char_manager.png",
+    style: "Deadpan middle manager",
+    prompt: "Deadpan corporate middle manager, rumpled blazer, loosened tie, earnest thousand-yard stare. Speaks in flat, measured tones. Never excited. Treats company collapse as a logistics problem.",
+  },
+  {
+    key: "believer",
+    name: "The True Believer",
+    imageUrl: "/characters/char_employee.png",
+    style: "Earnest true believer",
+    prompt: "Young enthusiastic true-believer employee who genuinely thinks everything is fine. Overly ironed polo, lanyard, slight forced smile. Speaks with too much conviction about mundane things.",
+  },
+  {
+    key: "it",
+    name: "The IT Guy",
+    imageUrl: "/characters/char_it.png",
+    style: "Exhausted skeptic",
+    prompt: "Exhausted, slightly dead-eyed IT worker in a hoodie under a blazer. Has seen everything. Responds to all questions with quiet, resigned expertise. Nothing surprises them anymore.",
+  },
+];
+
+function AgentCharacterPanel({ agent, token }: { agent: any; token: string | null }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [saving, setSaving] = useState(false);
+
+  const selectCharacter = async (char: typeof UGC_CHARACTERS[0]) => {
+    if (!token) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/agents/${agent.id}/character`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          characterName: char.name,
+          characterStyle: char.style,
+          characterImageUrl: char.imageUrl,
+          characterPrompt: char.prompt,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      await qc.invalidateQueries({ queryKey: ["admin-agents-fleet"] });
+      toast({ title: `Character set: ${char.name}`, description: "Engine will use this voice for TikTok content." });
+    } catch {
+      toast({ title: "Error", description: "Could not save character.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clearCharacter = async () => {
+    if (!token) return;
+    setSaving(true);
+    try {
+      await fetch(`/api/admin/agents/${agent.id}/character`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ characterName: null, characterStyle: null, characterImageUrl: null, characterPrompt: null }),
+      });
+      await qc.invalidateQueries({ queryKey: ["admin-agents-fleet"] });
+      toast({ title: "Character cleared" });
+    } catch {
+      toast({ title: "Error", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border border-border/40 rounded-lg p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium">UGC Character</span>
+          {agent.characterName
+            ? <Badge className="text-xs bg-amber-500/15 text-amber-400 border border-amber-500/30">{agent.characterName}</Badge>
+            : <Badge variant="outline" className="text-xs text-muted-foreground">None assigned</Badge>}
+        </div>
+        {agent.characterName && (
+          <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-muted-foreground"
+            onClick={clearCharacter} disabled={saving}>
+            Clear
+          </Button>
+        )}
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {UGC_CHARACTERS.map(char => {
+          const isActive = agent.characterName === char.name;
+          return (
+            <button
+              key={char.key}
+              onClick={() => selectCharacter(char)}
+              disabled={saving}
+              className={`relative rounded-lg overflow-hidden border-2 transition-all text-left ${
+                isActive
+                  ? "border-amber-500 ring-1 ring-amber-500/40"
+                  : "border-border/40 hover:border-border"
+              }`}
+            >
+              <img src={char.imageUrl} alt={char.name} className="w-full aspect-[9/16] object-cover" />
+              <div className={`absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent`} />
+              <div className="absolute bottom-0 left-0 right-0 p-1.5">
+                <p className="text-[10px] font-medium text-white leading-tight">{char.name}</p>
+                <p className="text-[9px] text-white/60 leading-tight">{char.style}</p>
+              </div>
+              {isActive && (
+                <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center">
+                  <Check className="w-2.5 h-2.5 text-black" />
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Agent Assistants Panel ────────────────────────────────────────────────────
 
 function AgentAssistantsPanel({ agentId, token }: { agentId: string; token: string | null }) {
@@ -1544,7 +1666,10 @@ function AgentsFleetTab({ token }: { token: string | null }) {
                           )}
                         </div>
 
-                        {/* Assistants panel */}
+                        {/* UGC Character */}
+                        <AgentCharacterPanel agent={agent} token={token} />
+
+                        {/* Assistants */}
                         <AgentAssistantsPanel agentId={agent.id} token={token} />
 
                         <Button size="sm" variant="outline" onClick={() => { setEditingId(agent.id); setEditForm({ ...agent }); }}>

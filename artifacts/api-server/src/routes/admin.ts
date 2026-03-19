@@ -407,6 +407,8 @@ router.get("/admin/agents-fleet", requireAdmin, async (req, res) => {
         nftMintEnabled: agent.nftMintEnabled, nftMintedAt: agent.nftMintedAt, nftTokenId: agent.nftTokenId,
         cdpWalletId: agent.cdpWalletId, cdpWalletAddress: agent.cdpWalletAddress,
         cdpWalletNetwork: agent.cdpWalletNetwork, cdpWalletCreatedAt: agent.cdpWalletCreatedAt,
+        characterName: agent.characterName, characterStyle: agent.characterStyle,
+        characterImageUrl: agent.characterImageUrl, characterPrompt: agent.characterPrompt,
       };
     }));
     res.json({ agents: enriched });
@@ -549,6 +551,25 @@ router.delete("/admin/agents/:id/assistants/:assistantId", requireAdmin, async (
       and(eq(agentAssistantsTable.id, req.params.assistantId), eq(agentAssistantsTable.agentId, req.params.id))
     );
     res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Agent Character ───────────────────────────────────────────────────────────
+
+// PUT /api/admin/agents/:id/character — set UGC character
+router.put("/admin/agents/:id/character", requireAdmin, async (req, res) => {
+  try {
+    const agent = await db.select().from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+    const { characterName, characterStyle, characterImageUrl, characterPrompt } = req.body;
+    const [updated] = await db.update(agentsTable).set({
+      characterName: characterName || null,
+      characterStyle: characterStyle || null,
+      characterImageUrl: characterImageUrl || null,
+      characterPrompt: characterPrompt || null,
+      updatedAt: new Date(),
+    }).where(eq(agentsTable.id, req.params.id)).returning();
+    res.json({ ok: true, characterName: updated.characterName, characterImageUrl: updated.characterImageUrl });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
