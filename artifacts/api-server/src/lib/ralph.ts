@@ -22,7 +22,7 @@ import {
 } from "./moltis.js";
 import { trackEvent } from "./funnel.js";
 
-const BATCH_SIZE = 20;
+const BATCH_SIZE = 30; // increased from 20 — 5000/day budget allows larger batches
 
 // ─── Agent context ────────────────────────────────────────────────────────────
 

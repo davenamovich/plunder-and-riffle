@@ -1,16 +1,18 @@
 /**
  * Background worker — runs scheduled tasks inside the API server process.
  *
- * Schedule (budget-aware, batch-optimised for 2000 calls/day):
+ * Schedule (budget-aware, batch-optimised for 5000 calls/day):
  *   30s    — expire stale rotator slots (no API calls)
- *   15 min — Ralph classify batch (1 call per tick, up to 20 leads)
- *   20 min — Ralph draft batch    (1 call per tick, up to 20 leads)
+ *   8 min  — Ralph classify batch (1 call per tick, up to 30 leads)
+ *   12 min — Ralph draft batch    (1 call per tick, up to 30 leads)
  *   60 min — reset daily caps + log API usage
  *
  * Budget math (worst-case, all leads every tick):
- *   classify: 24h / 15min = 96 calls/day
- *   draft:    24h / 20min = 72 calls/day
- *   Total automated: ~168 calls/day  →  leaves ~1,832 for on-demand use
+ *   classify: 24h / 8min  = 180 calls/day  → 5,400 leads/day
+ *   draft:    24h / 12min = 120 calls/day  → 3,600 leads/day
+ *   engine:   every 30min =  48 calls/day
+ *   sports:   every 6h    =  ~12 calls/day
+ *   Total automated: ~360 calls/day  →  leaves ~4,540 for on-demand use
  */
 
 import { db } from "@workspace/db";
@@ -103,11 +105,11 @@ export function startWorker() {
   // Expire stale slots — every 30s (free)
   setInterval(expireStaleSlots, 30 * SECOND);
 
-  // Classify raw leads — every 15 min (1 API call, 20 leads)
-  setInterval(runClassifyTick, 15 * MINUTE);
+  // Classify raw leads — every 8 min (1 API call, 30 leads)
+  setInterval(runClassifyTick, 8 * MINUTE);
 
-  // Draft scored leads — every 20 min (1 API call, 20 leads)
-  setInterval(runDraftTick, 20 * MINUTE);
+  // Draft scored leads — every 12 min (1 API call, 30 leads)
+  setInterval(runDraftTick, 12 * MINUTE);
 
   // Reset daily caps + log usage — every hour
   setInterval(resetDailyCaps, 60 * MINUTE);
@@ -143,5 +145,5 @@ export function startWorker() {
     runAllAgentEngines().catch(err => console.error("[worker] engine startup:", err));
   }, 5 * SECOND);
 
-  console.log("[worker] scheduled: expire=30s, classify=15m (batch), draft=20m (batch), caps=60m, engine=30m, sports-tips=6h");
+  console.log("[worker] scheduled: expire=30s, classify=8m×30 leads, draft=12m×30 leads, caps=60m, engine=30m, sports-tips=6h | budget=5000/day");
 }

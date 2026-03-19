@@ -2,13 +2,13 @@
  * Moltis client — Chutes.ai (OpenAI-compatible) with true batch processing.
  *
  * Key design: N leads → 1 API call (not N calls).
- * Daily budget: 2000 calls/day hard cap, tracked in DB.
+ * Daily budget: 5000 calls/day hard cap, tracked in DB.
  *
  * Env vars:
  *   CHUTES_API_KEY   — Chutes.ai API key
  *   CHUTES_BASE_URL  — default: https://llm.chutes.ai/v1
  *   CHUTES_MODEL     — default: chutesai/Mistral-Small-3.2-24B-Instruct-2506
- *   CHUTES_DAILY_CAP — default: 2000
+ *   CHUTES_DAILY_CAP — default: 5000
  */
 
 import { db } from "@workspace/db";
@@ -18,7 +18,7 @@ import { eq } from "drizzle-orm";
 const CHUTES_BASE_URL = process.env.CHUTES_BASE_URL || "https://llm.chutes.ai/v1";
 const CHUTES_API_KEY  = process.env.CHUTES_API_KEY;
 const CHUTES_MODEL    = process.env.CHUTES_MODEL || "chutesai/Mistral-Small-3.2-24B-Instruct-2506";
-const DAILY_CAP       = parseInt(process.env.CHUTES_DAILY_CAP || "2000", 10);
+const DAILY_CAP       = parseInt(process.env.CHUTES_DAILY_CAP || "5000", 10);
 const HARD_STOP       = DAILY_CAP - 100;
 
 // ─── Daily budget tracking ────────────────────────────────────────────────────
