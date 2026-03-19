@@ -427,6 +427,9 @@ export default function Admin() {
           <TabsTrigger value="sports" className="flex items-center gap-1.5">
             ⚽ Tips
           </TabsTrigger>
+          <TabsTrigger value="tokens" className="flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5" /> Tokens
+          </TabsTrigger>
         </TabsList>
 
         {/* ── RALPH TAB ── */}
@@ -1187,6 +1190,10 @@ export default function Admin() {
         {/* ── SPORTS TIPS TAB ── */}
         <TabsContent value="sports">
           <SportsTipsTab token={token} />
+        </TabsContent>
+
+        <TabsContent value="tokens">
+          <TokenUsageTab token={token} />
         </TabsContent>
 
       </Tabs>
@@ -2412,6 +2419,165 @@ function SportsTipsTab({ token }: { token: string | null }) {
           <p>3. <strong>LLM generation</strong> — Chutes.ai writes a deadpan pick per fixture (result, goals, BTTS, or corners).</p>
           <p>4. <strong>Telegram post</strong> — morning briefing + tips sent with a short delay between each.</p>
           <p>5. <strong>Fallback</strong> — if no fixtures found, handcrafted deadpan copy is used. Always posts something.</p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Token Usage Tab ──────────────────────────────────────────────────────────
+
+interface TokenRow {
+  agentId: string | null;
+  agentName: string | null;
+  agentSlug: string | null;
+  task: string;
+  totalCalls: number;
+  totalPrompt: number;
+  totalCompletion: number;
+  totalTokens: number;
+  totalLeads: number;
+}
+
+interface TokenGrandTotal {
+  totalCalls: number;
+  totalTokens: number;
+  totalPrompt: number;
+  totalCompletion: number;
+  totalLeads: number;
+}
+
+function TokenUsageTab({ token }: { token: string | null }) {
+  const [rows, setRows] = React.useState<TokenRow[]>([]);
+  const [grand, setGrand] = React.useState<TokenGrandTotal | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const load = React.useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/token-usage", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setRows(data.rows ?? []);
+      setGrand(data.grandTotal ?? null);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const taskBadge = (task: string) => {
+    const colors: Record<string, string> = {
+      classify: "bg-blue-100 text-blue-700",
+      draft:    "bg-purple-100 text-purple-700",
+      engine:   "bg-orange-100 text-orange-700",
+      icp:      "bg-green-100 text-green-700",
+      tip:      "bg-yellow-100 text-yellow-700",
+      unknown:  "bg-muted text-muted-foreground",
+    };
+    return (
+      <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${colors[task] ?? colors.unknown}`}>
+        {task}
+      </span>
+    );
+  };
+
+  const fmt = (n: number | null | undefined) =>
+    (n ?? 0).toLocaleString();
+
+  return (
+    <div className="space-y-6">
+      {/* Grand total */}
+      {grand && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          {[
+            { label: "Total Calls", value: fmt(grand.totalCalls) },
+            { label: "Total Tokens", value: fmt(grand.totalTokens) },
+            { label: "Prompt Tokens", value: fmt(grand.totalPrompt) },
+            { label: "Completion Tokens", value: fmt(grand.totalCompletion) },
+            { label: "Leads Processed", value: fmt(grand.totalLeads) },
+          ].map(s => (
+            <Card key={s.label}>
+              <CardContent className="pt-4 pb-3">
+                <p className="text-xs text-muted-foreground">{s.label}</p>
+                <p className="text-xl font-bold tabular-nums">{s.value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Breakdown table */}
+      <Card>
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Activity className="w-4 h-4 text-primary" /> Token Usage by Agent & Task
+          </CardTitle>
+          <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {error && <p className="text-sm text-destructive mb-3">{error}</p>}
+          {loading && !rows.length ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Loading token usage…</p>
+          ) : rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              No token usage recorded yet. Token tracking starts with the next Ralph cycle.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-xs text-muted-foreground">
+                    <th className="text-left py-2 pr-4 font-medium">Agent</th>
+                    <th className="text-left py-2 pr-4 font-medium">Task</th>
+                    <th className="text-right py-2 pr-4 font-medium">Calls</th>
+                    <th className="text-right py-2 pr-4 font-medium">Leads</th>
+                    <th className="text-right py-2 pr-4 font-medium">Prompt</th>
+                    <th className="text-right py-2 pr-4 font-medium">Completion</th>
+                    <th className="text-right py-2 font-medium">Total Tokens</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
+                      <td className="py-2 pr-4 font-medium">
+                        {r.agentName ?? <span className="text-muted-foreground italic">unattributed</span>}
+                        {r.agentSlug && (
+                          <span className="text-[10px] text-muted-foreground ml-1">@{r.agentSlug}</span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-4">{taskBadge(r.task)}</td>
+                      <td className="py-2 pr-4 text-right tabular-nums">{fmt(r.totalCalls)}</td>
+                      <td className="py-2 pr-4 text-right tabular-nums">{fmt(r.totalLeads)}</td>
+                      <td className="py-2 pr-4 text-right tabular-nums text-muted-foreground">{fmt(r.totalPrompt)}</td>
+                      <td className="py-2 pr-4 text-right tabular-nums text-muted-foreground">{fmt(r.totalCompletion)}</td>
+                      <td className="py-2 text-right tabular-nums font-semibold">{fmt(r.totalTokens)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-4 text-xs text-muted-foreground space-y-1">
+          <p><strong>classify</strong> — batch scoring of raw leads (30 leads per call)</p>
+          <p><strong>draft</strong> — reply drafting for high-intent leads (30 per call)</p>
+          <p><strong>engine</strong> — agent engine post generation (1 per agent per cycle)</p>
+          <p><strong>tip</strong> — sports tips generation (1 per fixture)</p>
+          <p><strong>icp</strong> — ICP analysis from offer URL (on-demand)</p>
+          <p className="pt-1 text-[11px]">Token tracking began after this version was deployed. Historical calls are not included.</p>
         </CardContent>
       </Card>
     </div>

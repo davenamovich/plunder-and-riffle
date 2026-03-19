@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable, personalRotatorLinksTable, offersTable, inheritedRefLinksTable, agentAssistantsTable } from "@workspace/db/schema";
+import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable, personalRotatorLinksTable, offersTable, inheritedRefLinksTable, agentAssistantsTable, agentTokenUsageTable } from "@workspace/db/schema";
 import { eq, and, gt, count, sql } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
 import { createAgentWallet, isCDPConfigured } from "../lib/cdp.js";
@@ -858,6 +858,49 @@ router.delete("/admin/offers/:id", requireAdmin, async (req, res) => {
   try {
     await db.delete(offersTable).where(eq(offersTable.id, req.params.id));
     res.json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Token usage ──────────────────────────────────────────────────────────────
+
+router.get("/admin/token-usage", requireAdmin, async (req, res) => {
+  try {
+    // Fleet-wide totals grouped by agent + task
+    const rows = await db
+      .select({
+        agentId:          agentTokenUsageTable.agentId,
+        agentName:        agentsTable.name,
+        agentSlug:        agentsTable.slug,
+        task:             agentTokenUsageTable.task,
+        totalCalls:       count(agentTokenUsageTable.id),
+        totalPrompt:      sql<number>`sum(${agentTokenUsageTable.promptTokens})::int`,
+        totalCompletion:  sql<number>`sum(${agentTokenUsageTable.completionTokens})::int`,
+        totalTokens:      sql<number>`sum(${agentTokenUsageTable.totalTokens})::int`,
+        totalLeads:       sql<number>`sum(${agentTokenUsageTable.leadsInBatch})::int`,
+      })
+      .from(agentTokenUsageTable)
+      .leftJoin(agentsTable, eq(agentTokenUsageTable.agentId, agentsTable.id))
+      .groupBy(
+        agentTokenUsageTable.agentId,
+        agentsTable.name,
+        agentsTable.slug,
+        agentTokenUsageTable.task,
+      )
+      .orderBy(sql`sum(${agentTokenUsageTable.totalTokens}) desc`);
+
+    // Grand total
+    const grandTotal = await db
+      .select({
+        totalCalls:      count(agentTokenUsageTable.id),
+        totalTokens:     sql<number>`sum(${agentTokenUsageTable.totalTokens})::int`,
+        totalPrompt:     sql<number>`sum(${agentTokenUsageTable.promptTokens})::int`,
+        totalCompletion: sql<number>`sum(${agentTokenUsageTable.completionTokens})::int`,
+        totalLeads:      sql<number>`sum(${agentTokenUsageTable.leadsInBatch})::int`,
+      })
+      .from(agentTokenUsageTable)
+      .then(r => r[0]);
+
+    res.json({ rows, grandTotal });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 

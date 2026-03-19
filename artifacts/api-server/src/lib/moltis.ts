@@ -12,7 +12,7 @@
  */
 
 import { db } from "@workspace/db";
-import { apiUsageTable } from "@workspace/db/schema";
+import { apiUsageTable, agentTokenUsageTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 
 const CHUTES_BASE_URL = process.env.CHUTES_BASE_URL || "https://llm.chutes.ai/v1";
@@ -54,11 +54,21 @@ export async function hasBudget(callsNeeded = 1): Promise<boolean> {
 
 // ─── Raw Chutes chat call ─────────────────────────────────────────────────────
 
-export async function chatOnce(systemPrompt: string, userMessage: string, temperature = 0.7): Promise<string> {
-  return chat(systemPrompt, userMessage, temperature);
+export async function chatOnce(
+  systemPrompt: string,
+  userMessage: string,
+  temperature = 0.7,
+  opts: { agentId?: string; task?: string } = {},
+): Promise<string> {
+  return chat(systemPrompt, userMessage, temperature, opts);
 }
 
-async function chat(systemPrompt: string, userMessage: string, temperature = 0.2): Promise<string> {
+async function chat(
+  systemPrompt: string,
+  userMessage: string,
+  temperature = 0.2,
+  opts: { agentId?: string; task?: string; leadsInBatch?: number } = {},
+): Promise<string> {
   const res = await fetch(`${CHUTES_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -83,8 +93,45 @@ async function chat(systemPrompt: string, userMessage: string, temperature = 0.2
     throw new Error(`Chutes API error ${res.status}: ${text.slice(0, 200)}`);
   }
 
-  const data = await res.json() as { choices: { message: { content: string } }[] };
+  const data = await res.json() as {
+    choices: { message: { content: string } }[];
+    usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  };
+
+  // Store token usage if available
+  if (data.usage) {
+    trackTokenUsage({
+      agentId: opts.agentId,
+      task: opts.task ?? "unknown",
+      model: CHUTES_MODEL,
+      promptTokens: data.usage.prompt_tokens ?? 0,
+      completionTokens: data.usage.completion_tokens ?? 0,
+      totalTokens: data.usage.total_tokens ?? 0,
+      leadsInBatch: opts.leadsInBatch ?? 1,
+    }).catch(() => {});
+  }
+
   return data.choices[0]?.message?.content?.trim() ?? "";
+}
+
+async function trackTokenUsage(args: {
+  agentId?: string;
+  task: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  leadsInBatch: number;
+}): Promise<void> {
+  await db.insert(agentTokenUsageTable).values({
+    agentId: args.agentId ?? null,
+    task: args.task,
+    model: args.model,
+    promptTokens: args.promptTokens,
+    completionTokens: args.completionTokens,
+    totalTokens: args.totalTokens,
+    leadsInBatch: args.leadsInBatch,
+  });
 }
 
 // ─── Fallbacks ────────────────────────────────────────────────────────────────
@@ -160,6 +207,7 @@ export interface LeadInput { id: string; content: string }
 export async function batchClassifyLeads(
   leads: LeadInput[],
   keywords: string[] = [],
+  agentId?: string,
 ): Promise<BatchClassifyResult> {
   if (!leads.length) return { results: [], usedFallback: false };
 
@@ -219,7 +267,9 @@ Return strict JSON array with exactly ${leads.length} objects in order:
     .join(",\n");
 
   try {
-    const response = await chat(system, `Score these candidates:\n[\n${candidates}\n]`);
+    const response = await chat(system, `Score these candidates:\n[\n${candidates}\n]`, 0.2, {
+      agentId, task: "classify", leadsInBatch: leads.length,
+    });
     const jsonMatch = response.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error("No JSON array in response");
 
@@ -313,6 +363,7 @@ export async function batchDraftResponses(
   leads: LeadInput[],
   persona: string,
   replyStyles?: string[],
+  agentId?: string,
 ): Promise<BatchDraftResult> {
   if (!leads.length) return { results: [], usedFallback: false };
 
@@ -379,7 +430,8 @@ Return ONLY valid JSON — an array with exactly ${leads.length} objects, in ord
     const response = await chat(
       system,
       `Write replies for these candidates:\n[\n${candidates}\n]`,
-      0.7,  // higher temperature for reply variety
+      0.7,
+      { agentId, task: "draft", leadsInBatch: leads.length },
     );
     const jsonMatch = response.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error("No JSON array in response");

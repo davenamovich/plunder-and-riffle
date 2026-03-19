@@ -124,7 +124,7 @@ export async function classifyRawLeads(): Promise<{ processed: number; rejected:
   console.log(`[ralph] batch classifying ${rawLeads.length} raw leads (1 API call)`);
 
   const inputs = rawLeads.map(l => ({ id: l.id, content: l.content }));
-  const { results, usedFallback } = await batchClassifyLeads(inputs, context.keywords);
+  const { results, usedFallback } = await batchClassifyLeads(inputs, context.keywords, context.agentId);
 
   if (usedFallback) {
     console.log("[ralph] classification used keyword fallback (no API key or budget)");
@@ -180,7 +180,7 @@ export async function classifyRawLeads(): Promise<{ processed: number; rejected:
   if (draftLeads.length > 0) {
     console.log(`[ralph] immediately drafting ${draftLeads.length} high-intent leads`);
     const draftInputs = draftLeads.map(l => ({ id: l.id, content: l.content }));
-    const { results: draftResults } = await batchDraftResponses(draftInputs, context.persona, draftReplyStyles);
+    const { results: draftResults } = await batchDraftResponses(draftInputs, context.persona, draftReplyStyles, context.agentId);
 
     const nextStatus = context.approvalMode === "auto" ? "approved" : "pending_approval";
 
@@ -228,7 +228,7 @@ export async function draftScoredLeads(): Promise<{ drafted: number; skipped: nu
 
   const inputs      = needsDraft.map(l => ({ id: l.id, content: l.content }));
   const replyStyles = needsDraft.map(l => l.replyStyle ?? "helpful");
-  const { results, usedFallback } = await batchDraftResponses(inputs, context.persona, replyStyles);
+  const { results, usedFallback } = await batchDraftResponses(inputs, context.persona, replyStyles, context.agentId);
 
   if (usedFallback) {
     console.log("[ralph] drafting used fallback (no API key or budget)");
