@@ -24,7 +24,7 @@ import {
 import { eq, and, gt } from "drizzle-orm";
 import { hasBudget } from "./moltis.js";
 
-const PLATFORMS = ["twitter", "linkedin"] as const;
+const PLATFORMS = ["twitter", "linkedin", "tiktok", "reddit"] as const;
 type Platform = (typeof PLATFORMS)[number];
 
 // ─── Content generation ───────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ async function generatePostContent(
   const { chat } = await import("./moltis.js") as any;
   if (!chat) return buildFallbackPost(platform, agentName, refLink, offerUrl);
 
-  const charLimits: Record<Platform, number> = { twitter: 240, linkedin: 600 };
+  const charLimits: Record<Platform, number> = { twitter: 240, linkedin: 600, tiktok: 300, reddit: 800 };
   const limit = charLimits[platform];
 
   const systemPrompt = `You are ${agentPersona}. Write a single compelling ${platform} post that drives traffic to a referral link. Be natural, not salesy. No hashtag spam. Max ${limit} characters.`;
@@ -90,6 +90,14 @@ function buildFallbackPost(platform: Platform, agentName: string, refLink: strin
       `I've been experimenting with AI-driven lead generation and the results are compelling.\n\nPlunder and Riffle gives every business owner a free 24-hour AI agent slot — no credit card required.\n\nIf you're curious about what AI can do for your pipeline, this is worth a look: ${refLink}`,
       `The future of business development is autonomous AI agents working around the clock.\n\nI've been testing this and the early results speak for themselves.\n\nFree trial available here: ${refLink}`,
     ],
+    tiktok: [
+      `POV: your AI agent is out here generating leads while you sleep 😤 No cap — free 24-hour slot, no credit card. Link: ${refLink}`,
+      `I let an AI agent run my outreach for a day and it actually worked 👀 Try it free → ${refLink}`,
+    ],
+    reddit: [
+      `[Not an ad] Been using an AI agent for lead gen through Plunder and Riffle for a few weeks. You get a free 24-hour slot to test it — no credit card needed. Worth a try if you're in sales or marketing: ${refLink}`,
+      `Has anyone else tried AI-powered lead generation? Found a platform that gives you a free trial slot and the results were surprisingly solid. Here's the link if you want to check it out: ${refLink}`,
+    ],
   };
 
   const pool = templates[platform];
@@ -110,7 +118,18 @@ async function postViaComposio(
 
   try {
     // Real Composio integration via their MCP/tool execution API
-    const toolName = platform === "twitter" ? "TWITTER_CREATION_REPLY_TO_TWEET" : "LINKEDIN_CREATE_LINKED_IN_POST";
+    const toolNames: Record<Platform, string> = {
+      twitter:  "TWITTER_CREATION_REPLY_TO_TWEET",
+      linkedin: "LINKEDIN_CREATE_LINKED_IN_POST",
+      tiktok:   "TIKTOK_CREATE_VIDEO_POST",
+      reddit:   "REDDIT_CREATE_POST",
+    };
+    const toolInputs: Record<Platform, Record<string, unknown>> = {
+      twitter:  { text: content },
+      linkedin: { text: content, visibility: "PUBLIC" },
+      tiktok:   { caption: content },
+      reddit:   { title: "Check this out", body: content },
+    };
     const resp = await fetch("https://backend.composio.dev/api/v1/actions/execute", {
       method: "POST",
       headers: {
@@ -119,10 +138,8 @@ async function postViaComposio(
       },
       body: JSON.stringify({
         connectedAccountId: entityId,
-        actionName: toolName,
-        input: platform === "twitter"
-          ? { text: content }
-          : { text: content, visibility: "PUBLIC" },
+        actionName: toolNames[platform],
+        input: toolInputs[platform],
       }),
     });
 

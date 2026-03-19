@@ -7,21 +7,23 @@ import { requireAuth } from "../lib/auth.js";
 const COMPOSIO_API_KEY = process.env.COMPOSIO_API_KEY || "";
 const COMPOSIO_BASE = "https://backend.composio.dev/api/v1";
 
-async function getComposioConnectionStatus(entityId: string): Promise<{ twitter: boolean; linkedin: boolean }> {
-  if (!COMPOSIO_API_KEY || !entityId) return { twitter: false, linkedin: false };
+async function getComposioConnectionStatus(entityId: string): Promise<{ twitter: boolean; linkedin: boolean; tiktok: boolean; reddit: boolean }> {
+  if (!COMPOSIO_API_KEY || !entityId) return { twitter: false, linkedin: false, tiktok: false, reddit: false };
   try {
     const resp = await fetch(`${COMPOSIO_BASE}/connectedAccounts?entityId=${encodeURIComponent(entityId)}&limit=50`, {
       headers: { "x-api-key": COMPOSIO_API_KEY },
     });
-    if (!resp.ok) return { twitter: false, linkedin: false };
+    if (!resp.ok) return { twitter: false, linkedin: false, tiktok: false, reddit: false };
     const data = await resp.json();
     const items: any[] = data?.items ?? [];
     return {
-      twitter: items.some((a: any) => a.appName?.toLowerCase().includes("twitter") && a.status === "ACTIVE"),
+      twitter:  items.some((a: any) => a.appName?.toLowerCase().includes("twitter")  && a.status === "ACTIVE"),
       linkedin: items.some((a: any) => a.appName?.toLowerCase().includes("linkedin") && a.status === "ACTIVE"),
+      tiktok:   items.some((a: any) => a.appName?.toLowerCase().includes("tiktok")   && a.status === "ACTIVE"),
+      reddit:   items.some((a: any) => a.appName?.toLowerCase().includes("reddit")   && a.status === "ACTIVE"),
     };
   } catch {
-    return { twitter: false, linkedin: false };
+    return { twitter: false, linkedin: false, tiktok: false, reddit: false };
   }
 }
 
@@ -114,10 +116,12 @@ router.get("/my-agent", requireAuth, async (req, res) => {
       availableAgents,
       composio: {
         entityId,
-        isConnected: composioStatus.twitter || composioStatus.linkedin,
+        isConnected: composioStatus.twitter || composioStatus.linkedin || composioStatus.tiktok || composioStatus.reddit,
         tools: [
-          { id: "twitter",  name: "Twitter / X", icon: "𝕏",  status: composioStatus.twitter  ? "connected" : "disconnected" },
-          { id: "linkedin", name: "LinkedIn",     icon: "in", status: composioStatus.linkedin ? "connected" : "disconnected" },
+          { id: "twitter",  name: "Twitter / X", icon: "𝕏",   status: composioStatus.twitter  ? "connected" : "disconnected" },
+          { id: "linkedin", name: "LinkedIn",     icon: "in",  status: composioStatus.linkedin ? "connected" : "disconnected" },
+          { id: "tiktok",   name: "TikTok",       icon: "TT",  status: composioStatus.tiktok   ? "connected" : "disconnected" },
+          { id: "reddit",   name: "Reddit",       icon: "R",   status: composioStatus.reddit   ? "connected" : "disconnected" },
         ],
       },
     });
@@ -133,8 +137,8 @@ router.post("/my-agent/composio/connect", requireAuth, async (req, res) => {
     const authUser = (req as any).user;
     const { platform } = req.body; // "twitter" | "linkedin"
 
-    if (!platform || !["twitter", "linkedin"].includes(platform)) {
-      res.status(400).json({ error: "platform must be 'twitter' or 'linkedin'" });
+    if (!platform || !["twitter", "linkedin", "tiktok", "reddit"].includes(platform)) {
+      res.status(400).json({ error: "platform must be 'twitter', 'linkedin', 'tiktok', or 'reddit'" });
       return;
     }
 
@@ -160,7 +164,7 @@ router.post("/my-agent/composio/connect", requireAuth, async (req, res) => {
       await db.update(usersTable).set({ composioEntityId: entityId }).where(eq(usersTable.id, user.id));
     }
 
-    const appName = platform === "twitter" ? "twitter" : "linkedin";
+    const appName = platform; // Composio app names match our platform IDs
     const appUrl = process.env.APP_URL || "https://plunderandriffle.com";
     const redirectUrl = `${appUrl}/my-agent?composio_connected=1`;
 
