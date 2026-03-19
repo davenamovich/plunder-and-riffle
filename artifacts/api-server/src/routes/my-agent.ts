@@ -185,7 +185,7 @@ router.post("/my-agent/composio/connect", requireAuth, async (req, res) => {
         .where(eq(agentAssistantsTable.userId, authUser.id)).limit(1).then(r => r[0] ?? null),
     ]);
 
-    if (!ownedAgent && !assistantRow) {
+    if (!ownedAgent && !assistantRow && authUser.role !== "admin") {
       res.status(403).json({ error: "Only agent owners or assistants can connect social accounts" });
       return;
     }
