@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable, personalRotatorLinksTable, offersTable, inheritedRefLinksTable } from "@workspace/db/schema";
+import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable, personalRotatorLinksTable, offersTable, inheritedRefLinksTable, agentAssistantsTable } from "@workspace/db/schema";
 import { eq, and, gt, count, sql } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
 import { createAgentWallet, isCDPConfigured } from "../lib/cdp.js";
@@ -457,6 +457,94 @@ router.delete("/admin/agents/:id", requireAdmin, async (req, res) => {
     if (agent.slug === "ralph") { res.status(400).json({ error: "Cannot delete the main agent" }); return; }
     await db.delete(agentsTable).where(eq(agentsTable.id, req.params.id));
     res.json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Agent Assistants ─────────────────────────────────────────────────────────
+
+// GET /api/admin/agents/:id/assistants
+router.get("/admin/agents/:id/assistants", requireAdmin, async (req, res) => {
+  try {
+    const rows = await db
+      .select({ assistant: agentAssistantsTable, user: usersTable })
+      .from(agentAssistantsTable)
+      .innerJoin(usersTable, eq(agentAssistantsTable.userId, usersTable.id))
+      .where(eq(agentAssistantsTable.agentId, req.params.id));
+    res.json({
+      assistants: rows.map(r => ({
+        id: r.assistant.id,
+        userId: r.user.id,
+        email: r.user.email,
+        displayName: r.user.displayName,
+        slug: r.user.slug,
+        addedAt: r.assistant.addedAt,
+      })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// POST /api/admin/agents/:id/assistants — add by email (creates user if needed)
+router.post("/admin/agents/:id/assistants", requireAdmin, async (req, res) => {
+  try {
+    const agent = await db.select().from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+
+    const { email } = req.body;
+    if (!email || typeof email !== "string" || !email.includes("@")) {
+      res.status(400).json({ error: "Valid email required" }); return;
+    }
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Find or create the user
+    let user = await db.select().from(usersTable).where(eq(usersTable.email, normalizedEmail)).limit(1).then(r => r[0]);
+    if (!user) {
+      // Create a placeholder user so they can log in later
+      const { generateReferralCode } = await import("../lib/slugify.js");
+      const slug = normalizedEmail.split("@")[0].replace(/[^a-z0-9]/g, "") + Math.random().toString(36).slice(2, 5);
+      const [newUser] = await db.insert(usersTable).values({
+        email: normalizedEmail,
+        slug,
+        displayName: normalizedEmail.split("@")[0],
+        referralCode: generateReferralCode(),
+      }).returning();
+      user = newUser;
+    }
+
+    // Prevent duplicate
+    const existing = await db.select().from(agentAssistantsTable)
+      .where(and(eq(agentAssistantsTable.agentId, agent.id), eq(agentAssistantsTable.userId, user.id)))
+      .limit(1).then(r => r[0]);
+    if (existing) { res.status(409).json({ error: "Already an assistant of this agent" }); return; }
+
+    const [row] = await db.insert(agentAssistantsTable).values({
+      agentId: agent.id,
+      userId: user.id,
+    }).returning();
+
+    res.json({
+      ok: true,
+      assistant: {
+        id: row.id,
+        userId: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        slug: user.slug,
+        addedAt: row.addedAt,
+      },
+    });
+  } catch (err: any) {
+    if (err.code === "23505") { res.status(409).json({ error: "Already an assistant" }); return; }
+    console.error(err); res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /api/admin/agents/:id/assistants/:assistantId
+router.delete("/admin/agents/:id/assistants/:assistantId", requireAdmin, async (req, res) => {
+  try {
+    await db.delete(agentAssistantsTable).where(
+      and(eq(agentAssistantsTable.id, req.params.assistantId), eq(agentAssistantsTable.agentId, req.params.id))
+    );
+    res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 

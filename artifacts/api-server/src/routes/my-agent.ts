@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { agentsTable, rotatorSlotsTable, usersTable } from "@workspace/db/schema";
+import { agentsTable, rotatorSlotsTable, usersTable, agentAssistantsTable } from "@workspace/db/schema";
 import { eq, and, gt, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 
@@ -50,7 +50,7 @@ router.get("/my-agent", requireAuth, async (req, res) => {
     const authUser = (req as any).user;
     const now = new Date();
 
-    const [user, allSlots, availableAgents, ownedAgent] = await Promise.all([
+    const [user, allSlots, availableAgents, ownedAgent, assistantRows] = await Promise.all([
       db.select().from(usersTable).where(eq(usersTable.id, authUser.id)).limit(1).then(r => r[0]),
       db.select({ slot: rotatorSlotsTable, agent: agentsTable })
         .from(rotatorSlotsTable)
@@ -70,17 +70,32 @@ router.get("/my-agent", requireAuth, async (req, res) => {
         .where(eq(agentsTable.ownerId, authUser.id))
         .limit(1)
         .then(r => r[0] ?? null),
+      // Check if this user is an assistant on any agent
+      db.select({ assistant: agentAssistantsTable, agent: agentsTable })
+        .from(agentAssistantsTable)
+        .innerJoin(agentsTable, eq(agentAssistantsTable.agentId, agentsTable.id))
+        .where(eq(agentAssistantsTable.userId, authUser.id)),
     ]);
 
     if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
     const ownsAgent = !!ownedAgent;
+    const assistantAgents = assistantRows.map(r => ({
+      id: r.agent.id,
+      slug: r.agent.slug,
+      name: r.agent.name,
+      assistantRecordId: r.assistant.id,
+    }));
+    // Agent access = owns agent OR is assistant of at least one agent
+    const hasAgentAccess = ownsAgent || assistantAgents.length > 0;
+    // Primary agent for display: owned first, then first assistant assignment
+    const primaryAgent = ownedAgent ?? (assistantAgents[0] ? { id: assistantAgents[0].id, slug: assistantAgents[0].slug, name: assistantAgents[0].name } : null);
 
     // Only fetch Composio status if user owns an agent and has an entity ID
     const entityId = user.composioEntityId ?? user.id;
-    const composioStatus = ownsAgent
+    const composioStatus = hasAgentAccess
       ? await getComposioConnectionStatus(entityId)
-      : { twitter: false, linkedin: false };
+      : { twitter: false, linkedin: false, tiktok: false, reddit: false };
 
     const enrichedSlots = allSlots.map(s => ({
       id: s.slot.id,
@@ -111,6 +126,10 @@ router.get("/my-agent", requireAuth, async (req, res) => {
       },
       ownsAgent,
       ownedAgent,
+      isAssistant: !ownsAgent && assistantAgents.length > 0,
+      assistantAgents,
+      hasAgentAccess,
+      primaryAgent,
       slots: enrichedSlots,
       activeSlotCount: activeSlots.length,
       availableAgents,
@@ -142,15 +161,16 @@ router.post("/my-agent/composio/connect", requireAuth, async (req, res) => {
       return;
     }
 
-    // Only agent owners can connect social accounts
-    const ownedAgent = await db.select({ id: agentsTable.id })
-      .from(agentsTable)
-      .where(eq(agentsTable.ownerId, authUser.id))
-      .limit(1)
-      .then(r => r[0] ?? null);
+    // Only agent owners or assistants can connect social accounts
+    const [ownedAgent, assistantRow] = await Promise.all([
+      db.select({ id: agentsTable.id }).from(agentsTable)
+        .where(eq(agentsTable.ownerId, authUser.id)).limit(1).then(r => r[0] ?? null),
+      db.select({ id: agentAssistantsTable.id }).from(agentAssistantsTable)
+        .where(eq(agentAssistantsTable.userId, authUser.id)).limit(1).then(r => r[0] ?? null),
+    ]);
 
-    if (!ownedAgent) {
-      res.status(403).json({ error: "Only agent owners can connect social accounts" });
+    if (!ownedAgent && !assistantRow) {
+      res.status(403).json({ error: "Only agent owners or assistants can connect social accounts" });
       return;
     }
 

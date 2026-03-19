@@ -25,6 +25,8 @@ interface Tool {
   status: "connected" | "disconnected";
 }
 
+interface AssistantAgent { id: string; slug: string; name: string; assistantRecordId: string; }
+
 interface MyAgentData {
   user: {
     id: string; email: string; slug: string; displayName: string | null;
@@ -33,6 +35,10 @@ interface MyAgentData {
   };
   ownsAgent: boolean;
   ownedAgent: { id: string; slug: string; name: string } | null;
+  isAssistant: boolean;
+  assistantAgents: AssistantAgent[];
+  hasAgentAccess: boolean;
+  primaryAgent: { id: string; slug: string; name: string } | null;
   slots: {
     id: string; agentId: string; agentName: string; agentSlug: string;
     slotType: string; status: string; expiresAt: string;
@@ -530,30 +536,35 @@ export default function MyAgentPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {!data.ownsAgent ? (
-                    /* Locked state for non-owners */
+                  {!data.hasAgentAccess ? (
+                    /* Locked state — no agent access */
                     <div className="p-4 rounded-xl bg-muted/20 border border-border/40 flex items-start gap-3">
                       <Lock className="h-5 w-5 text-muted-foreground/50 mt-0.5 flex-shrink-0" />
                       <div>
-                        <p className="text-sm font-medium text-foreground mb-1">Requires an Agent</p>
+                        <p className="text-sm font-medium text-foreground mb-1">Requires agent access</p>
                         <p className="text-xs text-muted-foreground leading-relaxed">
-                          Social connections are only available to users who manage their own agent on the platform.
-                          Agent managers configure their Twitter / X and LinkedIn here so the AI can post on their behalf.
+                          Social connections are only available to agent owners and assigned assistants.
+                          Contact an admin to be assigned to an agent.
                         </p>
-                        {data.ownedAgent === null && (
-                          <p className="text-xs text-muted-foreground mt-2">
-                            You don't own an agent yet. Contact the admin to be assigned as an agent owner.
-                          </p>
-                        )}
                       </div>
                     </div>
                   ) : (
                     <>
-                      {/* Owned agent badge */}
-                      <div className="p-2.5 rounded-xl bg-primary/5 border border-primary/20 flex items-center gap-2 text-xs">
+                      {/* Agent badge — owner or assistant */}
+                      <div className="p-2.5 rounded-xl bg-primary/5 border border-primary/20 flex items-center gap-2 text-xs flex-wrap">
                         <UserCheck className="h-3.5 w-3.5 text-primary flex-shrink-0" />
-                        <span className="text-muted-foreground">Managing agent:</span>
-                        <span className="font-semibold text-foreground">{data.ownedAgent?.name}</span>
+                        <span className="text-muted-foreground">
+                          {data.ownsAgent ? "Managing agent:" : "Assigned as assistant to:"}
+                        </span>
+                        <span className="font-semibold text-foreground">{data.primaryAgent?.name}</span>
+                        {data.isAssistant && (
+                          <span className="ml-auto px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-medium">
+                            Assistant
+                          </span>
+                        )}
+                        {data.assistantAgents.length > 1 && (
+                          <span className="text-muted-foreground text-[10px]">+{data.assistantAgents.length - 1} more</span>
+                        )}
                       </div>
 
                       {/* Tool list */}
@@ -573,7 +584,7 @@ export default function MyAgentPage() {
                         <p className="text-xs text-muted-foreground leading-relaxed">
                           <strong className="text-foreground">Your accounts, your posts.</strong> Connecting authorizes
                           the platform to post on your behalf only when the agent engine runs a campaign you're part of.
-                          You can revoke access at any time from Twitter / LinkedIn settings.
+                          You can revoke access at any time from your platform settings.
                         </p>
                         <a
                           href="https://composio.dev"

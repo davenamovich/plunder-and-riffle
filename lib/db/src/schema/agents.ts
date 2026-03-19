@@ -78,3 +78,14 @@ export const agentOffersTable = pgTable("agent_offers", {
 });
 
 export type AgentOffer = typeof agentOffersTable.$inferSelect;
+
+// ─── Agent Assistants ─────────────────────────────────────────────────────────
+
+export const agentAssistantsTable = pgTable("agent_assistants", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  agentId: text("agent_id").notNull().references(() => agentsTable.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  addedAt: timestamp("added_at").notNull().defaultNow(),
+});
+
+export type AgentAssistant = typeof agentAssistantsTable.$inferSelect;

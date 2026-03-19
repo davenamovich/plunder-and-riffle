@@ -39,7 +39,7 @@ import {
   AlertTriangle, ToggleLeft, ToggleRight, Mail, Send, BarChart2,
   Check, Ban, Copy, Plus, Minus, Wallet, Gem, PauseCircle, PlayCircle,
   Settings2, ExternalLink, Plug, Link2, MessageSquare, Loader2,
-  Tag, Edit3, Gift, ShieldCheck,
+  Tag, Edit3, Gift, ShieldCheck, UserPlus, UserMinus, UserCheck,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -1159,6 +1159,106 @@ export default function Admin() {
   );
 }
 
+// ─── Agent Assistants Panel ────────────────────────────────────────────────────
+
+function AgentAssistantsPanel({ agentId, token }: { agentId: string; token: string | null }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [email, setEmail] = useState("");
+
+  const headers = token
+    ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+    : { "Content-Type": "application/json" };
+
+  const { data, isLoading } = useQuery<{ assistants: { id: string; userId: string; email: string; displayName: string | null; addedAt: string }[] }>({
+    queryKey: ["agent-assistants", agentId],
+    queryFn: () => fetch(`/api/admin/agents/${agentId}/assistants`, { headers }).then(r => r.json()),
+    staleTime: 15_000,
+  });
+
+  const addAssistant = useMutation({
+    mutationFn: (email: string) =>
+      fetch(`/api/admin/agents/${agentId}/assistants`, {
+        method: "POST", headers, body: JSON.stringify({ email }),
+      }).then(r => r.json()),
+    onSuccess: (res: any) => {
+      if (res.error) { toast({ title: "Error", description: res.error, variant: "destructive" }); return; }
+      toast({ title: "Assistant added" });
+      setEmail("");
+      qc.invalidateQueries({ queryKey: ["agent-assistants", agentId] });
+    },
+  });
+
+  const removeAssistant = useMutation({
+    mutationFn: (id: string) =>
+      fetch(`/api/admin/agents/${agentId}/assistants/${id}`, { method: "DELETE", headers }).then(r => r.json()),
+    onSuccess: () => {
+      toast({ title: "Assistant removed" });
+      qc.invalidateQueries({ queryKey: ["agent-assistants", agentId] });
+    },
+  });
+
+  return (
+    <div className="rounded-lg border border-border/40 bg-muted/10 p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <UserCheck className="w-3.5 h-3.5 text-primary" />
+        <span className="text-xs font-medium">Assistants</span>
+        {data && <Badge variant="outline" className="text-[10px]">{data.assistants.length}</Badge>}
+      </div>
+
+      {/* Add assistant */}
+      <div className="flex gap-2">
+        <Input
+          placeholder="user@email.com"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          className="h-7 text-xs"
+          onKeyDown={e => { if (e.key === "Enter" && email.trim()) addAssistant.mutate(email.trim()); }}
+        />
+        <Button
+          size="sm" className="h-7 px-2 text-xs"
+          disabled={!email.trim() || addAssistant.isPending}
+          onClick={() => addAssistant.mutate(email.trim())}
+        >
+          {addAssistant.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
+        </Button>
+      </div>
+
+      {/* List */}
+      {isLoading ? (
+        <div className="space-y-1">
+          <Skeleton className="h-6 w-full" />
+          <Skeleton className="h-6 w-3/4" />
+        </div>
+      ) : data?.assistants.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic">No assistants assigned.</p>
+      ) : (
+        <div className="space-y-1">
+          {data?.assistants.map(a => (
+            <div key={a.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded-md bg-muted/20">
+              <UserCheck className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+              <span className="flex-1 truncate">
+                {a.displayName ? <><span className="font-medium">{a.displayName}</span> <span className="text-muted-foreground">&lt;{a.email}&gt;</span></> : a.email}
+              </span>
+              <span className="text-muted-foreground text-[10px] hidden sm:block">
+                {formatDistanceToNow(new Date(a.addedAt), { addSuffix: true })}
+              </span>
+              <button
+                className="text-destructive hover:text-destructive/80 flex-shrink-0"
+                title="Remove assistant"
+                onClick={() => { if (confirm(`Remove ${a.email} as assistant?`)) removeAssistant.mutate(a.id); }}
+                disabled={removeAssistant.isPending}
+              >
+                <UserMinus className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Agents Fleet Tab ──────────────────────────────────────────────────────────
 
 function AgentsFleetTab({ token }: { token: string | null }) {
@@ -1416,6 +1516,9 @@ function AgentsFleetTab({ token }: { token: string | null }) {
                             </div>
                           )}
                         </div>
+
+                        {/* Assistants panel */}
+                        <AgentAssistantsPanel agentId={agent.id} token={token} />
 
                         <Button size="sm" variant="outline" onClick={() => { setEditingId(agent.id); setEditForm({ ...agent }); }}>
                           <Settings2 className="w-3 h-3 mr-1" /> Edit Profile
