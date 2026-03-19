@@ -3,7 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useGetAgentStats } from "@workspace/api-client-react";
-import { ArrowRight, Bot, Zap, Coins, Users, Link as LinkIcon, DollarSign, Shield, Layers, Repeat2, Bitcoin, Clock, TrendingUp } from "lucide-react";
+import { ArrowRight, Bot, Zap, Coins, Users, Link as LinkIcon, DollarSign, Shield, Layers, Repeat2, Bitcoin, Clock, TrendingUp, AlertTriangle, Brain, Globe, ChevronRight, Eye, Cpu } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { COMMON_ROLES } from "@/lib/icp";
 
@@ -251,6 +251,7 @@ export default function Landing() {
       </section>
 
       <KeyInsightCallout />
+      <AgenticWorldSection />
       <IncomeStackSection />
       <PaidSeatSplitSection />
       <HowItWorksSection />
@@ -627,5 +628,242 @@ function StepCard({
       <h3 className="text-xl font-bold mb-3">{title}</h3>
       <p className="text-muted-foreground text-sm leading-relaxed">{body}</p>
     </div>
+  );
+}
+
+// ─── Agentic World Section ───────────────────────────────────────────────────
+
+const AGENTIC_SHIFTS = [
+  {
+    icon: <Cpu className="w-6 h-6 text-primary" />,
+    stat: "2027",
+    label: "Estimated year AI agents outnumber human workers in outbound sales",
+    note: "This is not a projection. It is a schedule.",
+  },
+  {
+    icon: <Brain className="w-6 h-6 text-orange-400" />,
+    stat: "10,000×",
+    label: "The leverage an agent-backed operator has over a manual one",
+    note: "The gap is not closing. It is widening daily.",
+  },
+  {
+    icon: <Globe className="w-6 h-6 text-blue-400" />,
+    stat: "$4.6T",
+    label: "Global economic value added by AI agents through 2030 (McKinsey, mid estimate)",
+    note: "The question is which side of that number you are on.",
+  },
+  {
+    icon: <Eye className="w-6 h-6 text-emerald-400" />,
+    stat: "72%",
+    label: "Share of knowledge work tasks AI can already perform at human-expert level",
+    note: "Most people have not noticed. That is the point.",
+  },
+];
+
+const WHAT_HAPPENS = [
+  {
+    label: "If you get involved now",
+    items: [
+      "Your agent handles prospecting while you sleep.",
+      "Commissions stack automatically. USDC, on-chain.",
+      "Each referral trains your agent's ICP further.",
+      "You become infrastructure, not labour.",
+    ],
+    color: "border-primary/40 bg-primary/5",
+    labelColor: "text-primary",
+  },
+  {
+    label: "If you do not",
+    items: [
+      "Someone else's agent contacts your clients first.",
+      "Your manual outreach falls below the noise floor.",
+      "The compounding effect accrues to early operators.",
+      "You spend 2026 wondering what happened in 2025.",
+    ],
+    color: "border-red-500/30 bg-red-500/5",
+    labelColor: "text-red-400",
+  },
+];
+
+function AgenticWorldSection() {
+  const [expanded, setExpanded] = React.useState(false);
+
+  return (
+    <section className="py-20 px-4 relative overflow-hidden">
+      {/* Background treatment */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-primary/3 blur-3xl" />
+      </div>
+
+      <div className="max-w-5xl mx-auto relative z-10">
+
+        {/* Section header — deadpan P&R voice */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="text-center mb-14"
+        >
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-orange-500/40 bg-orange-500/10 text-orange-400 text-xs font-medium mb-6">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            FIELD INTELLIGENCE REPORT — PLUNDER &amp; RIFFLE RESEARCH DIVISION
+          </div>
+          <h2 className="text-4xl md:text-5xl font-display font-bold mb-4">
+            The Agentic Shift<br />
+            <span className="text-primary">is not coming.</span>
+          </h2>
+          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+            It arrived. Most people missed it. A small number did not.
+            This section exists to make sure you are not caught off guard.
+          </p>
+          <p className="text-xs text-muted-foreground/60 italic mt-3">
+            "We felt a responsibility to educate the market. Primarily because an educated market
+            buys more seats. But also, genuinely, as a public service." — P&amp;R Director of Market Awareness
+          </p>
+        </motion.div>
+
+        {/* Stat grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-14">
+          {AGENTIC_SHIFTS.map((item, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.4, delay: i * 0.1 }}
+              className="glass-panel rounded-2xl p-6 flex gap-5 items-start"
+            >
+              <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
+                {item.icon}
+              </div>
+              <div>
+                <div className="text-3xl font-display font-bold text-foreground mb-1">{item.stat}</div>
+                <div className="text-sm text-muted-foreground mb-1">{item.label}</div>
+                <div className="text-xs text-muted-foreground/60 italic">{item.note}</div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* The fork in the road */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="mb-12"
+        >
+          <h3 className="text-2xl font-display font-bold text-center mb-2">
+            Two Trajectories. One Decision.
+          </h3>
+          <p className="text-muted-foreground text-center text-sm mb-8">
+            The fork is not visible from the outside. Both paths look the same for about six months.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {WHAT_HAPPENS.map((path, i) => (
+              <div key={i} className={`rounded-2xl border p-6 ${path.color}`}>
+                <div className={`text-sm font-bold uppercase tracking-wider mb-4 ${path.labelColor}`}>
+                  {path.label}
+                </div>
+                <ul className="space-y-3">
+                  {path.items.map((item, j) => (
+                    <li key={j} className="flex items-start gap-3">
+                      <ChevronRight className={`w-4 h-4 mt-0.5 flex-shrink-0 ${path.labelColor}`} />
+                      <span className="text-sm text-muted-foreground">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Expandable explainer */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          className="rounded-2xl border border-border/40 bg-card/30 overflow-hidden mb-10"
+        >
+          <button
+            className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-white/5 transition-colors"
+            onClick={() => setExpanded(!expanded)}
+          >
+            <span className="font-semibold text-foreground">
+              What exactly is an AI agent and why does it change everything?
+            </span>
+            <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${expanded ? "rotate-90" : ""}`} />
+          </button>
+          <AnimatePresence>
+            {expanded && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="overflow-hidden"
+              >
+                <div className="px-6 pb-6 space-y-4 text-sm text-muted-foreground leading-relaxed border-t border-border/30 pt-5">
+                  <p>
+                    An AI agent is a software entity that perceives its environment, reasons about goals, takes actions,
+                    and improves from outcomes — without requiring a human to initiate each step. It is not a chatbot.
+                    It is not a macro. It is a system that runs continuously in the background and executes work.
+                  </p>
+                  <p>
+                    For business owners, this means: prospecting happens while you sleep. Content is researched and posted
+                    while you are in meetings. Follow-up sequences run while you are on holiday. The agent does not
+                    experience fatigue, distraction, or the need to be reminded.
+                  </p>
+                  <p>
+                    The economic implication is not subtle. Labour is the primary cost in most service businesses.
+                    Agents reduce the marginal cost of outbound work to near zero. The businesses that adopt this
+                    infrastructure first will compress their cost structures in ways that are difficult for slower-moving
+                    competitors to match on any relevant timescale.
+                  </p>
+                  <p>
+                    Plunder &amp; Riffle exists to give ordinary operators access to this infrastructure without
+                    requiring a technical team, a large budget, or an understanding of how any of it works under the hood.
+                    You provide the goal. The agent provides the effort.
+                  </p>
+                  <p className="italic text-muted-foreground/60">
+                    "We are, in our own way, democratising something. We are not entirely sure what.
+                    Our lawyers have asked us not to say. But it feels significant." — P&amp;R Founder, Q3 Retrospective
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+
+        {/* Hard CTA */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.4 }}
+          className="text-center"
+        >
+          <p className="text-2xl md:text-3xl font-display font-bold mb-2">
+            You do not have days to waste.
+          </p>
+          <p className="text-muted-foreground mb-6 max-w-xl mx-auto">
+            The operators who deploy agents in Q1 will have months of compounding data,
+            trained ICPs, and established distribution before late adopters start their first workflow.
+            This is not a scare tactic. It is arithmetic.
+          </p>
+          <p className="text-xs text-muted-foreground/50 italic mb-6">
+            "We have reviewed the data internally. We strongly recommend not being late to this.
+            We say this with genuine warmth." — P&amp;R Board of Urgent Advisors
+          </p>
+          <a href="#join">
+            <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 text-base px-8">
+              Get Involved Now <ArrowRight className="w-4 h-4" />
+            </Button>
+          </a>
+        </motion.div>
+
+      </div>
+    </section>
   );
 }

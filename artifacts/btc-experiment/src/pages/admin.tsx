@@ -40,6 +40,7 @@ import {
   Check, Ban, Copy, Plus, Minus, Wallet, Gem, PauseCircle, PlayCircle,
   Settings2, ExternalLink, Plug, Link2, MessageSquare, Loader2,
   Tag, Edit3, Gift, ShieldCheck, UserPlus, UserMinus, UserCheck, ArrowRight,
+  Coins, PieChart, CircleDollarSign,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -398,7 +399,7 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="ralph" className="w-full">
-        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-11 h-11 mb-8">
+        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-12 h-11 mb-8">
           <TabsTrigger value="ralph" className="flex items-center gap-1.5">
             <Bot className="w-3.5 h-3.5" /> Ralph
           </TabsTrigger>
@@ -435,6 +436,9 @@ export default function Admin() {
           </TabsTrigger>
           <TabsTrigger value="persona-engine" className="flex items-center gap-1.5">
             <Zap className="w-3.5 h-3.5" /> Persona Engine
+          </TabsTrigger>
+          <TabsTrigger value="splits" className="flex items-center gap-1.5">
+            <Coins className="w-3.5 h-3.5" /> Splits
           </TabsTrigger>
         </TabsList>
 
@@ -1208,6 +1212,10 @@ export default function Admin() {
 
         <TabsContent value="persona-engine">
           <AgentPersonaEngineTab token={token} />
+        </TabsContent>
+
+        <TabsContent value="splits">
+          <CommissionSplitsTab token={token} />
         </TabsContent>
 
       </Tabs>
@@ -3392,6 +3400,335 @@ function AgentPersonaEngineTab({ token }: { token: string | null }) {
             </p>
           </CardContent>
         </Card>
+      )}
+    </div>
+  );
+}
+
+// ─── Commission Splits Tab ──────────────────────────────────────────────────
+
+const SPLIT_STATUS_COLORS: Record<string, string> = {
+  pending:   "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+  approved:  "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  paid:      "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  cancelled: "bg-red-500/15 text-red-400 border-red-500/30",
+};
+
+const RECIPIENT_LABELS: Record<string, string> = {
+  referrer:      "Referrer",
+  agent_manager: "Agent Manager",
+  bot_ops:       "Bot Ops",
+  dev:           "Dev",
+};
+
+function CommissionSplitsTab({ token }: { token: string | null }) {
+  const { toast } = useToast();
+  const [splits, setSplits] = React.useState<any[]>([]);
+  const [requests, setRequests] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [filter, setFilter] = React.useState<string>("all");
+  const [activeView, setActiveView] = React.useState<"splits" | "requests">("splits");
+
+  // New USDC request form state
+  const [newReq, setNewReq] = React.useState({ agentId: "", amountUsd: "", payerEmail: "", purpose: "paid_seat" });
+  const [creating, setCreating] = React.useState(false);
+
+  const adminFetch = React.useCallback(
+    (path: string, opts?: RequestInit) =>
+      fetch(`/api/admin${path}`, {
+        ...opts,
+        headers: { ...(opts?.headers ?? {}), Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      }).then((r) => r.json()),
+    [token]
+  );
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const [s, r] = await Promise.all([
+        adminFetch("/commission-splits"),
+        adminFetch("/usdc-payment-requests"),
+      ]);
+      if (s.ok) setSplits(s.splits ?? []);
+      if (r.ok) setRequests(r.requests ?? []);
+    } catch {}
+    setLoading(false);
+  }, [adminFetch]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const approve = async (id: string) => {
+    await adminFetch(`/commission-splits/${id}/approve`, { method: "PATCH" });
+    toast({ title: "Split approved" });
+    load();
+  };
+
+  const cancel = async (id: string) => {
+    await adminFetch(`/commission-splits/${id}/cancel`, { method: "PATCH", body: JSON.stringify({ reason: "Admin cancelled" }) });
+    toast({ title: "Split cancelled" });
+    load();
+  };
+
+  const confirmPayment = async (id: string) => {
+    const txHash = window.prompt("Enter the on-chain tx hash to confirm this payment:");
+    if (!txHash) return;
+    const res = await adminFetch(`/usdc-payment-requests/${id}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({ txHash }),
+    });
+    if (res.ok) { toast({ title: "Payment confirmed. Commission splits generated." }); load(); }
+    else toast({ title: "Error", description: res.error, variant: "destructive" });
+  };
+
+  const createRequest = async () => {
+    if (!newReq.agentId || !newReq.amountUsd) return;
+    setCreating(true);
+    const res = await adminFetch("/usdc-payment-requests", {
+      method: "POST",
+      body: JSON.stringify({ ...newReq, amountUsd: parseFloat(newReq.amountUsd) }),
+    });
+    setCreating(false);
+    if (res.ok) {
+      toast({ title: `Payment request created`, description: `Reference: ${res.request?.referenceCode}` });
+      setNewReq({ agentId: "", amountUsd: "", payerEmail: "", purpose: "paid_seat" });
+      load();
+    } else {
+      toast({ title: "Error", description: res.error, variant: "destructive" });
+    }
+  };
+
+  const filteredSplits = filter === "all" ? splits : splits.filter((s) => s.status === filter);
+
+  const totalPending = splits.filter((s) => s.status === "pending").reduce((a, b) => a + b.splitAmount, 0);
+  const totalPaid    = splits.filter((s) => s.status === "paid").reduce((a, b) => a + b.splitAmount, 0);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <Coins className="w-5 h-5 text-primary" /> Commission Splits
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            25% referrer · 25% agent manager · 25% bot ops · 25% dev — every paid event.
+          </p>
+          <p className="text-xs text-muted-foreground/60 italic">
+            "We considered a different split. We landed here. It felt equitable given the circumstances." — P&R Finance Committee
+          </p>
+        </div>
+        <Button size="sm" variant="outline" onClick={load} className="gap-2 shrink-0">
+          <RefreshCw className="w-3.5 h-3.5" /> Refresh
+        </Button>
+      </div>
+
+      {/* KPI bar */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Total Splits", value: splits.length, icon: <PieChart className="w-4 h-4 text-muted-foreground" /> },
+          { label: "Pending (USDC)", value: `$${totalPending.toFixed(2)}`, icon: <Clock className="w-4 h-4 text-yellow-400" /> },
+          { label: "Paid Out (USDC)", value: `$${totalPaid.toFixed(2)}`, icon: <CircleDollarSign className="w-4 h-4 text-emerald-400" /> },
+          { label: "Payment Requests", value: requests.length, icon: <Send className="w-4 h-4 text-blue-400" /> },
+        ].map((k) => (
+          <Card key={k.label} className="border-border/40">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">{k.icon}{k.label}</div>
+              <div className="text-2xl font-bold">{k.value}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* View toggle */}
+      <div className="flex gap-2">
+        <Button size="sm" variant={activeView === "splits" ? "default" : "outline"} onClick={() => setActiveView("splits")}>
+          Commission Splits
+        </Button>
+        <Button size="sm" variant={activeView === "requests" ? "default" : "outline"} onClick={() => setActiveView("requests")}>
+          USDC Payment Requests
+        </Button>
+      </div>
+
+      {/* ── Commission Splits Table ── */}
+      {activeView === "splits" && (
+        <div className="space-y-4">
+          {/* Status filter */}
+          <div className="flex gap-2 flex-wrap">
+            {["all", "pending", "approved", "paid", "cancelled"].map((s) => (
+              <Button key={s} size="sm" variant={filter === s ? "default" : "ghost"}
+                className="text-xs h-7" onClick={() => setFilter(s)}>
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </Button>
+            ))}
+          </div>
+
+          {loading ? (
+            <div className="space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
+          ) : filteredSplits.length === 0 ? (
+            <Card className="border-dashed border-border/40">
+              <CardContent className="py-12 text-center">
+                <Coins className="w-8 h-8 mx-auto text-muted-foreground mb-3" />
+                <p className="text-muted-foreground text-sm">No splits found.</p>
+                <p className="text-xs text-muted-foreground/60 italic mt-1">
+                  "There is currently no money in motion. This is fine. Probably." — P&R Treasury
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {filteredSplits.map((split) => (
+                <Card key={split.id} className="border-border/40">
+                  <CardContent className="p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`text-xs px-2 py-1 rounded-full border font-medium ${SPLIT_STATUS_COLORS[split.status] ?? ""}`}>
+                          {split.status}
+                        </div>
+                        <div>
+                          <div className="font-medium text-sm">
+                            {RECIPIENT_LABELS[split.recipientType] ?? split.recipientType}
+                            <span className="text-muted-foreground font-normal"> · {split.splitPct}%</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate max-w-[260px]">
+                            {split.recipientAddress ? split.recipientAddress : <span className="italic">No address set</span>}
+                          </div>
+                          <div className="text-xs text-muted-foreground/60">
+                            {split.eventType} · source: {split.sourceId?.slice(0, 12)}...
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 shrink-0">
+                        <div className="text-right">
+                          <div className="font-bold text-base">${split.splitAmount.toFixed(2)}</div>
+                          <div className="text-xs text-muted-foreground">of ${split.grossAmount.toFixed(2)}</div>
+                        </div>
+                        <div className="flex gap-2">
+                          {split.status === "pending" && (
+                            <>
+                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                                onClick={() => approve(split.id)}>
+                                <CheckCircle className="w-3.5 h-3.5" /> Approve
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-red-400"
+                                onClick={() => cancel(split.id)}>
+                                <XCircle className="w-3.5 h-3.5" />
+                              </Button>
+                            </>
+                          )}
+                          {split.status === "paid" && split.txHash && (
+                            <a href={`https://basescan.org/tx/${split.txHash}`} target="_blank" rel="noreferrer"
+                              className="text-xs text-primary hover:underline flex items-center gap-1">
+                              <ExternalLink className="w-3 h-3" /> Basescan
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── USDC Payment Requests ── */}
+      {activeView === "requests" && (
+        <div className="space-y-6">
+          {/* Create new request */}
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <CircleDollarSign className="w-4 h-4 text-primary" /> New USDC Payment Request
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Generates a Base mainnet USDC payment address for an agent. Confirming the payment auto-creates 4 commission splits.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Agent ID</label>
+                  <Input value={newReq.agentId} onChange={(e) => setNewReq({ ...newReq, agentId: e.target.value })}
+                    placeholder="agent UUID" className="h-8 text-xs" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Amount (USD)</label>
+                  <Input type="number" value={newReq.amountUsd} onChange={(e) => setNewReq({ ...newReq, amountUsd: e.target.value })}
+                    placeholder="99.00" className="h-8 text-xs" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Payer Email (optional)</label>
+                  <Input value={newReq.payerEmail} onChange={(e) => setNewReq({ ...newReq, payerEmail: e.target.value })}
+                    placeholder="user@example.com" className="h-8 text-xs" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Purpose</label>
+                  <select className="w-full h-8 text-xs bg-background border border-input rounded px-2"
+                    value={newReq.purpose} onChange={(e) => setNewReq({ ...newReq, purpose: e.target.value })}>
+                    <option value="paid_seat">Paid Seat</option>
+                    <option value="subscription">Subscription</option>
+                  </select>
+                </div>
+              </div>
+              <Button size="sm" onClick={createRequest} disabled={creating || !newReq.agentId || !newReq.amountUsd} className="gap-2">
+                {creating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                Create Request
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* List */}
+          {loading ? (
+            <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}</div>
+          ) : requests.length === 0 ? (
+            <Card className="border-dashed border-border/40">
+              <CardContent className="py-12 text-center">
+                <CircleDollarSign className="w-8 h-8 mx-auto text-muted-foreground mb-3" />
+                <p className="text-muted-foreground text-sm">No payment requests yet.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {requests.map((req) => (
+                <Card key={req.id} className="border-border/40">
+                  <CardContent className="p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${SPLIT_STATUS_COLORS[req.status] ?? ""}`}>
+                            {req.status}
+                          </span>
+                          <span className="text-xs font-mono text-muted-foreground">{req.referenceCode}</span>
+                        </div>
+                        <div className="font-bold">${req.amountUsdc?.toFixed(2)} USDC</div>
+                        <div className="text-xs text-muted-foreground mt-1 break-all">{req.toAddress}</div>
+                        {req.payerEmail && <div className="text-xs text-muted-foreground">{req.payerEmail}</div>}
+                        <div className="text-xs text-muted-foreground/60">
+                          {req.purpose} · expires {req.expiresAt ? new Date(req.expiresAt).toLocaleDateString() : "—"}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        {req.status === "pending" && (
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-emerald-400 border-emerald-500/30"
+                            onClick={() => confirmPayment(req.id)}>
+                            <CheckCircle className="w-3.5 h-3.5" /> Confirm Payment
+                          </Button>
+                        )}
+                        {req.txHash && (
+                          <a href={`https://basescan.org/tx/${req.txHash}`} target="_blank" rel="noreferrer"
+                            className="text-xs text-primary hover:underline flex items-center gap-1">
+                            <ExternalLink className="w-3 h-3" /> Basescan
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

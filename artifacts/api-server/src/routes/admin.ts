@@ -14,6 +14,14 @@ import {
   getAllSequences, getDmQueue, triggerDmForLead,
   markDmSent, cancelDmSend, upsertSequence,
 } from "../lib/dm.js";
+import {
+  generateSplits,
+  listSplits,
+  createUsdcPaymentRequest,
+  confirmPaymentAndSplit,
+  payApprovedSplit,
+} from "../lib/commission-splitter.js";
+import { commissionSplitsTable, usdcPaymentRequestsTable } from "@workspace/db/schema";
 
 const router = Router();
 
@@ -1205,6 +1213,116 @@ router.post("/admin/agents/:id/composio/test-post", requireAdmin, async (req, re
 
     const result = await executeAction(agent.composioEntityId, app.action, { text: content, message: content });
     res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+// ─── Commission Splits & USDC Payments ─────────────────────────────────────
+
+/** List all commission splits (optionally filter by status) */
+router.get("/commission-splits", async (req, res) => {
+  try {
+    const { status } = req.query as { status?: string };
+    const splits = await listSplits(status);
+    res.json({ ok: true, splits });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+/** Manually generate splits for a custom event (testing / backfill) */
+router.post("/commission-splits/generate", async (req, res) => {
+  try {
+    const { eventType, sourceId, agentId, grossAmount, recipients, notes } = req.body;
+    const splits = await generateSplits({ eventType, sourceId, agentId, grossAmount, recipients, notes });
+    res.json({ ok: true, splits });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+/** Approve a single split (moves it to approved, ready for payout) */
+router.patch("/commission-splits/:id/approve", async (req, res) => {
+  try {
+    await db.update(commissionSplitsTable)
+      .set({ status: "approved", updatedAt: new Date() })
+      .where(eq(commissionSplitsTable.id, req.params.id));
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+/** Pay an approved split via USDC from treasury wallet */
+router.post("/commission-splits/:id/pay", async (req, res) => {
+  try {
+    const { fromWalletId } = req.body;
+    if (!fromWalletId) return res.status(400).json({ error: "fromWalletId required" });
+    await payApprovedSplit(req.params.id, fromWalletId);
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+/** Cancel a split */
+router.patch("/commission-splits/:id/cancel", async (req, res) => {
+  try {
+    await db.update(commissionSplitsTable)
+      .set({ status: "cancelled", cancelReason: req.body.reason ?? "Admin cancelled", updatedAt: new Date() })
+      .where(eq(commissionSplitsTable.id, req.params.id));
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+// ─── USDC Payment Requests ──────────────────────────────────────────────────
+
+/** Create a new USDC payment request for a user/agent */
+router.post("/usdc-payment-requests", async (req, res) => {
+  try {
+    const { agentId, payerId, payerEmail, amountUsd, purpose } = req.body;
+    if (!agentId || !amountUsd) return res.status(400).json({ error: "agentId and amountUsd required" });
+    const request = await createUsdcPaymentRequest({ agentId, payerId, payerEmail, amountUsd, purpose });
+    res.json({ ok: true, request });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+/** List all USDC payment requests */
+router.get("/usdc-payment-requests", async (req, res) => {
+  try {
+    const requests = await db.select().from(usdcPaymentRequestsTable).orderBy(usdcPaymentRequestsTable.createdAt);
+    res.json({ ok: true, requests });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+/** Confirm a USDC payment (manual admin confirmation or webhook) */
+router.post("/usdc-payment-requests/:id/confirm", async (req, res) => {
+  try {
+    const { txHash, referrerId, referrerAddress, agentManagerId, agentManagerAddress, botOpsAddress, devAddress } = req.body;
+    if (!txHash) return res.status(400).json({ error: "txHash required" });
+    await confirmPaymentAndSplit(req.params.id, txHash, {
+      referrerId, referrerAddress, agentManagerId, agentManagerAddress, botOpsAddress, devAddress
+    });
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+/** Expire a payment request */
+router.patch("/usdc-payment-requests/:id/expire", async (req, res) => {
+  try {
+    await db.update(usdcPaymentRequestsTable)
+      .set({ status: "expired", updatedAt: new Date() })
+      .where(eq(usdcPaymentRequestsTable.id, req.params.id));
+    res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err?.message });
   }
