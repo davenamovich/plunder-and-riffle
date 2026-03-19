@@ -9,6 +9,7 @@ export interface PlatformUser {
   role: string;
   createdAt: string;
   referralCode: string;
+  tokens: number;
 }
 
 interface AuthContextType {

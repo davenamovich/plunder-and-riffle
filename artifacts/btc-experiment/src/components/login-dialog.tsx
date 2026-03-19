@@ -43,7 +43,14 @@ export function LoginDialog({ open, onClose, onSuccess }: LoginDialogProps) {
         }
 
         onSuccess(data.token, data.user);
-        onClose();
+        
+        // If new signup (0 tokens), redirect to onboarding instead
+        if (data.user.tokens === 0) {
+          onClose();
+          setTimeout(() => window.location.replace("/onboarding"), 100);
+        } else {
+          onClose();
+        }
         setLoading(false);
       } catch (err) {
         setError("Network error. Please try again.");

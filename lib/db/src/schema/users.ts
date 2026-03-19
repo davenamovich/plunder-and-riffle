@@ -27,6 +27,7 @@ export const usersTable = pgTable("users", {
   nftEarned: boolean("nft_earned").notNull().default(false),
   nftEarnedAt: timestamp("nft_earned_at"),
   nftClaimTxHash: text("nft_claim_tx_hash"),
+  tokens: integer("tokens").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

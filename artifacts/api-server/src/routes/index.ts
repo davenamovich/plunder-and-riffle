@@ -14,6 +14,7 @@ import onboardingRouter from "./onboarding.js";
 import myAgentRouter from "./my-agent.js";
 import engineRouter from "./engine.js";
 import moltisRouter from "./moltis.js";
+import usersRouter from "./users.js";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(trackingRouter);
 router.use(myAgentRouter);
 router.use(engineRouter);
 router.use(moltisRouter);
+router.use("/users", usersRouter);
 
 export default router;

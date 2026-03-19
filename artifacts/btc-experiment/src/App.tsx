@@ -17,6 +17,7 @@ import MyAgentPage from "@/pages/my-agent";
 import EnginePage from "@/pages/engine";
 import OffersPage from "@/pages/offers";
 import ReferralLanding from "@/pages/referral-landing";
+import OnboardingPage from "@/pages/onboarding";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Landing} />
       <Route path="/icp" component={IcpPage} />
+      <Route path="/onboarding" component={OnboardingPage} />
       <Route path="/agents" component={AgentsPage} />
       <Route path="/my-agent" component={MyAgentPage} />
       <Route path="/engine/:slug" component={EnginePage} />

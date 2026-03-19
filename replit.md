@@ -63,3 +63,4 @@
 - ✅ **6-digit referral codes**: Changed from slug-based to numeric 6-digit format (e.g., `123456`). Referral links are `/r/123456`
 - ✅ **Admin navigation**: Added Home, Agents, Dashboard buttons to admin page header
 - ✅ **Slot duration 24 hours**: All rotator slots expire in 24 hours
+- ✅ **Onboarding bridge page**: New users see `/onboarding` after signup with agent grid + referral link saver. Saving link grants 1 token (24-hour slot)
