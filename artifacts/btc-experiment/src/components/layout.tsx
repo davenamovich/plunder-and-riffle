@@ -33,7 +33,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <nav className="flex items-center space-x-2 md:space-x-4">
             {/* Public links */}
             <div className="hidden md:flex items-center space-x-4">
-              {navLink("/agents", "Agents")}
+              {navLink("/agents", "Choose Your Agent")}
             </div>
 
             {isAuthenticated ? (
