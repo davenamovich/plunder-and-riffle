@@ -230,7 +230,7 @@ export async function runSportsTipsEngine(triggeredBy: "scheduler" | "admin" = "
     // 4. End-of-batch marker
     if (tipsSent > 0) {
       await new Promise(r => setTimeout(r, 1000));
-      await sendTelegram(`✅ <b>${tipsSent} tip${tipsSent !== 1 ? "s" : ""} sent.</b>\n\nGood luck. Don't bet what you can't afford to lose.\n\n<i>This channel will always be free. Refer a friend if you find it useful.</i>`);
+      await sendTelegram(`✅ <b>${tipsSent} tip${tipsSent !== 1 ? "s" : ""} sent.</b>\n\n<i>This channel will always be free. Refer a friend if you find it useful.</i>`);
     }
 
     return { ok: true, fixturesFound: fixtures.length, tipsSent, briefingSent };
