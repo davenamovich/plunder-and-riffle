@@ -64,8 +64,8 @@ async function generatePostContent(
   const charLimits: Record<Platform, number> = { twitter: 240, linkedin: 600, tiktok: 300, reddit: 800 };
   const limit = charLimits[platform];
 
-  const systemPrompt = `You are ${agentPersona}. Write a single compelling ${platform} post that drives traffic to a referral link. Be natural, not salesy. No hashtag spam. Max ${limit} characters.`;
-  const userMsg = `Write a ${platform} post promoting: ${offerUrl}\nInclude this referral link naturally: ${refLink}\nKeep it under ${limit} characters. Do not add quotes around the post.`;
+  const systemPrompt = `You are ${agentPersona}. You write deadpan, first-person social posts about using AI to grow a business. The tone is dry, earnest, and slightly baffled by your own results. No exclamation marks. No hype. No hashtags. No buzzwords. 60-90 words. The humor comes from treating something genuinely extraordinary as if it's Tuesday. You include one referral link, naturally, as an afterthought.`;
+  const userMsg = `Write a single ${platform} post about the experience of using AI for lead generation. Something happened that shouldn't be this normal — describe it flatly. Include this link once, casually: ${refLink}. 60-90 words. No quotes around the post. No hashtags.`;
 
   try {
     const { chatRaw } = await import("./moltis.js") as any;
@@ -83,21 +83,21 @@ async function generatePostContent(
 function buildFallbackPost(platform: Platform, agentName: string, refLink: string, offerUrl: string): string {
   const templates: Record<Platform, string[]> = {
     twitter: [
-      `🔥 ${agentName} is working 24/7 so you don't have to. AI-powered lead gen with no upfront cost. Try it free → ${refLink}`,
-      `Everyone will have an AI agent. The question is: is one working for YOU? Get yours free → ${refLink}`,
-      `Your AI agent is live. 24-hour free slot, no credit card. Start here → ${refLink}`,
+      `My AI agent sent 94 messages last week. I sent zero. Three of those 94 turned into real conversations. I have reviewed the transcripts. I would not have done as well. Here if you want one of your own: ${refLink}`,
+      `${agentName} has been running for four days. It has not complained once. I have complained twice just reading the logs. Free 24-hour slot, no card required: ${refLink}`,
+      `I set up an AI agent to generate leads. It is currently outperforming me. I am choosing to see this as a win. ${refLink}`,
     ],
     linkedin: [
-      `I've been experimenting with AI-driven lead generation and the results are compelling.\n\nPlunder and Riffle gives every business owner a free 24-hour AI agent slot — no credit card required.\n\nIf you're curious about what AI can do for your pipeline, this is worth a look: ${refLink}`,
-      `The future of business development is autonomous AI agents working around the clock.\n\nI've been testing this and the early results speak for themselves.\n\nFree trial available here: ${refLink}`,
+      `I want to be honest with you.\n\nI set up an AI agent three weeks ago. It has since sent messages I wouldn't have sent, to people I wouldn't have reached, with results I'm not entirely comfortable with.\n\nThey were good results. That's the part I'm sitting with.\n\nFree 24-hour trial if you want to find out what yours does while you're asleep: ${refLink}`,
+      `Something happened this week that I'm still processing.\n\nMy AI agent closed a lead at 2:47am on a Tuesday. I was unconscious. The lead said it was the best outreach they'd received all year.\n\nI would like to believe this reflects well on me in some indirect way.\n\nFree agent slot here: ${refLink}`,
     ],
     tiktok: [
-      `POV: your AI agent is out here generating leads while you sleep 😤 No cap — free 24-hour slot, no credit card. Link: ${refLink}`,
-      `I let an AI agent run my outreach for a day and it actually worked 👀 Try it free → ${refLink}`,
+      `[stares at camera] My agent sent 47 messages while I slept. I woke up to two replies and a calendar invite. I made coffee. This is my life now. ${refLink}`,
+      `POV: you check your AI agent's logs for the first time and it has been busy. Very busy. You were not prepared for how busy. ${refLink}`,
     ],
     reddit: [
-      `[Not an ad] Been using an AI agent for lead gen through Plunder and Riffle for a few weeks. You get a free 24-hour slot to test it — no credit card needed. Worth a try if you're in sales or marketing: ${refLink}`,
-      `Has anyone else tried AI-powered lead generation? Found a platform that gives you a free trial slot and the results were surprisingly solid. Here's the link if you want to check it out: ${refLink}`,
+      `Not sure how to frame this, but I've had an AI agent running my lead gen for 6 weeks and it's just... fine? Like, it works. I get leads. The AI does things I wouldn't do. Some of them work. I've stopped questioning it. 24-hour free trial if you want to find out what yours does: ${refLink}`,
+      `Someone at my company asked who'd been doing outreach at 3am. Nobody said anything. We all looked at the dashboard. The AI had sent 31 messages. We are investigating whether this is a problem. Current assessment: probably not. ${refLink}`,
     ],
   };
 
@@ -164,8 +164,8 @@ async function generateViralHook(
     const characterVoice = characterPrompt
       ? `\n\nThe specific character voice: ${characterPrompt}`
       : "";
-    const systemPrompt = `You write deadpan mockumentary-style social content for Plunder and Riffle — a fictional "8 billion reviews" failing SaaS company that is definitely fine. The tone is dry, earnest, slightly defeated, Office/Silicon Valley mockumentary style. First-person, no hype, no exclamation marks. The humor comes from treating absurdity completely straight. Never break the bit.${characterVoice} Max ${limit} chars.`;
-    const userMsg = `Write a single ${platform} post as ${name}, an employee at Plunder and Riffle. Include this referral link naturally: ${refLink}. The company has 8 billion reviews and the AI runs all night. Stay fully in character. Deadpan, earnest, slightly ominous. No excitement. No hashtags. Under ${limit} chars. No quotes around the post.`;
+    const systemPrompt = `You write deadpan mockumentary social content for Plunder and Riffle — a SaaS company with 8 billion reviews that is definitely, completely fine. The tone is The Office meets Silicon Valley: dry, first-person, earnest, slightly defeated. No exclamation marks. No hashtags. No hype. Exactly 60-90 words. The humor comes from treating something absurd as utterly routine. The referral link appears once, mentioned the way someone mentions a fire exit they've stopped worrying about. Never break the bit.${characterVoice}`;
+    const userMsg = `Write a single ${platform} post as ${name}, a mid-level employee at Plunder and Riffle. Something happened with the AI that should be alarming but isn't anymore. Describe it in a flat, tired, completely sane voice. Mention this link once, naturally: ${refLink}. No hashtags. No quotes. 60-90 words.`;
 
     const raw: string = await chatRaw(systemPrompt, userMsg, 0.9);
     return raw.trim().replace(/^["']|["']$/g, "").slice(0, limit);

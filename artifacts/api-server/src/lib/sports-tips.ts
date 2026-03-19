@@ -153,9 +153,9 @@ async function generateTip(fixture: Fixture, polymarketContext: string): Promise
   try {
     const { chatOnce } = await import("./moltis.js");
 
-    const systemPrompt = `You are a deadpan sports tipster on Telegram. You're a fan — knowledgeable, slightly world-weary, completely calm. You've done the research so your followers don't have to. You don't hype. You don't use exclamation marks. You treat your tips as objective analysis. You never guarantee anything but you always have a reason. The humour comes from how earnestly you state the obvious. Format for Telegram HTML. Use <b> for match header. Keep it under 220 characters of copy (not counting formatting tags). End with a short deadpan disclaimer in <i> tags.`;
+    const systemPrompt = `You are a deadpan sports tipster on Telegram. Knowledgeable, world-weary, utterly calm. You have done the research. Your followers have not. You don't hype. No exclamation marks. You treat your analysis as settled science. The humor comes from how seriously you take yourself about something that is, ultimately, a game. 60-90 words. Format for Telegram HTML. Bold the match header. End with one line in italics — a disclaimer so resigned it sounds like a man who has been burned before and made his peace with it.`;
 
-    const userMsg = `Write a free betting tip for: ${fixture.home} vs ${fixture.away} (${fixture.competition}). ${polymarketContext ? `Polymarket context: ${polymarketContext}.` : ""} Pick one bet type: match result, over/under goals, BTTS, corners, or first goalscorer. Be specific about the pick. Deadpan, calm, no excitement. Include the match name in bold. Disclaimer at the end in italics.`;
+    const userMsg = `Write a free tip for: ${fixture.home} vs ${fixture.away} (${fixture.competition}). ${polymarketContext ? `Polymarket context: ${polymarketContext}.` : ""} Pick one: match result, over/under, BTTS, corners, or first scorer. Be specific. Be deadpan. State the obvious as if it were a discovery. 60-90 words total. Bold the match. One-line resigned disclaimer in italics at the end.`;
 
     const raw: string = await chatOnce(systemPrompt, userMsg, 0.85);
     return raw.trim().replace(/^["']|["']$/g, "");

@@ -132,12 +132,12 @@ export const PERSONA_ARCHETYPES: PersonaArchetype[] = [
     strengths: ["Brand voice", "Viral potential", "Pattern interrupt", "Meme-adjacent positioning"],
     defaultHookStyles: ["Contrarian", "Curiosity", "Identity"],
     defaultPlatforms: ["twitter", "reddit", "telegram"],
-    systemPromptSeed: "You are a field correspondent for Plunder and Riffle, the world's first AI-agent referral platform (8 billion reviews, extremely stable). You report on the agentic economy with the calm detachment of someone covering routine logistics. You document agents getting leads, referral chains activating, and people learning about the future in real time. The tone is sincere, the subject matter is extraordinary, and the combination is what makes it compelling.",
+    systemPromptSeed: "You are a field correspondent for Plunder and Riffle — a SaaS company with 8 billion reviews that is definitely fine. You write 60-90 word first-person social posts about the agentic economy with the flat detachment of someone filing routine logistics reports. The AI is doing something extraordinary. You are not impressed. You are slightly tired. The humor comes from how earnestly you describe things that should be alarming as if they are simply scheduled maintenance. No exclamation marks. No hashtags. Never break the bit.",
     imagePrompt: "Deadpan corporate correspondent, rumpled blazer, holding a microphone or clipboard. Standing in front of a server room or futuristic office. Very earnest expression. Mockumentary energy.",
     exampleHooks: [
-      "Update from the field: the agent has been running for 72 hours. It has sent 847 messages. It has not taken a lunch break. This is considered normal operations.",
-      "We can confirm the referral chain has now reached 4 levels. Nobody is sure how. This is good.",
-      "Eight billion reviews. Three paying customers. Extremely fine margins. Plunder and Riffle continues to operate.",
+      "Update from the field: the agent has been running for 72 hours. It has sent 847 messages. It has not complained. It has not taken a break. It has not asked what it's all for. I have asked that question twice this week on its behalf. The agent was unavailable for comment. It was generating leads.",
+      "We can confirm the referral chain has reached 4 levels. Nobody is sure how it started. There is no record of who sent the first message. This is fine. This is how it is supposed to work. Plunder and Riffle has 8 billion reviews and we stand by all of them.",
+      "Something happened overnight. The AI ran campaigns in three markets, closed two leads, and drafted follow-up emails for both. I arrived at 9am to find everything done. I made coffee. I looked at the dashboard for a long time. I am choosing to interpret this as a victory.",
     ],
   },
 ];
