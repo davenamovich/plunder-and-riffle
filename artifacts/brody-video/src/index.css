@@ -1,34 +1,50 @@
 @import "tailwindcss";
 
-@theme {
-  --color-brand-wood: #2c1a0f;
-  --color-brand-amber: #b45f06;
-  --color-brand-gold: #f1c232;
-  --color-brand-navy: #0b1a2c;
-  --color-brand-sand: #f5deb3;
-  --font-display: "Bebas Neue", sans-serif;
-  --font-body: "Inter", sans-serif;
+/* REPLACE THESE -- define your own palette and fonts for each video */
+:root {
+  --color-primary: #000000;
+  --color-secondary: #6B7280;
+  --color-accent: #3B82F6;
+
+  --color-bg-light: #FFFFFF;
+  --color-bg-dark: #0F172A;
+  --color-bg-muted: #F8FAFC;
+
+  --color-text-primary: #111827;
+  --color-text-secondary: #6B7280;
+  --color-text-muted: #9CA3AF;
+  --color-text-inverse: #FFFFFF;
+
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
-@layer base {
-  :root {
-    --background: var(--color-brand-wood);
-    --foreground: var(--color-brand-sand);
-  }
-  
-  body {
-    @apply bg-[var(--background)] text-[var(--foreground)] overflow-hidden;
-    margin: 0;
-    padding: 0;
-    font-family: var(--font-body);
-  }
-  
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-display);
-    letter-spacing: 0.02em;
-  }
+@theme inline {
+  --color-primary: var(--color-primary);
+  --color-secondary: var(--color-secondary);
+  --color-accent: var(--color-accent);
+  --color-bg-light: var(--color-bg-light);
+  --color-bg-dark: var(--color-bg-dark);
+  --color-bg-muted: var(--color-bg-muted);
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-inverse: var(--color-text-inverse);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-error: var(--color-error);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
 }
 
-.font-display {
-  font-family: var(--font-display);
+body {
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

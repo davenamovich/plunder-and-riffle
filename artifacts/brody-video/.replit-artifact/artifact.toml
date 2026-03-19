@@ -1,0 +1,31 @@
+kind = "video"
+previewPath = "/brody-video/"
+title = "Brody - 60s Mockumentary"
+version = "1.0.0"
+id = "artifacts/brody-video"
+router = "path"
+
+[[integratedSkills]]
+name = "video-js"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/brody-video/" ]
+localPort = 18920
+
+[services.development]
+run = "pnpm --filter @workspace/brody-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/brody-video", "run", "build" ]
+publicDir = "artifacts/brody-video/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18920"
+BASE_PATH = "/brody-video/"
