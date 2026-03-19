@@ -39,7 +39,41 @@ export interface AgentWalletInfo {
   createdAt: Date | null;
 }
 
-// ─── Retry helper ─────────────────────────────────────────────────────────────
+// ─── Global serial wallet-creation queue ──────────────────────────────────────
+// CDP enforces ~1 CreateWallet per 60 seconds per API key.
+// We serialize all creation requests through a single promise chain and enforce
+// a mandatory 70-second cool-down after each attempt (success or failure) so
+// concurrent admin triggers and the background worker never collide.
+
+const CREATION_COOLDOWN_MS = 70_000; // 70 s between any two CreateWallet calls
+let _walletCreationChain: Promise<unknown> = Promise.resolve();
+let _lastCreationAt = 0;
+
+function queueWalletCreation<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  const job = _walletCreationChain.then(async (): Promise<T> => {
+    // Enforce minimum gap since last creation attempt
+    const elapsed = Date.now() - _lastCreationAt;
+    const wait = Math.max(0, CREATION_COOLDOWN_MS - elapsed);
+    if (wait > 0) {
+      console.log(`[cdp] ${label} — queue cool-down ${Math.ceil(wait / 1000)}s…`);
+      await new Promise(r => setTimeout(r, wait));
+    }
+    _lastCreationAt = Date.now();
+    try {
+      return await fn();
+    } finally {
+      // Reset clock after the call regardless of success/failure so the next
+      // caller waits a full cooldown from this moment.
+      _lastCreationAt = Date.now();
+    }
+  });
+  // Advance the chain regardless of individual success/failure so subsequent
+  // jobs are not permanently blocked by a rejected promise.
+  _walletCreationChain = job.catch(() => {});
+  return job;
+}
+
+// ─── Retry helper (used inside the queue, only for transient errors) ──────────
 
 function isRateLimitError(err: any): boolean {
   return (
@@ -53,21 +87,23 @@ function isRateLimitError(err: any): boolean {
 async function withRetry<T>(
   label: string,
   fn: () => Promise<T>,
-  maxAttempts = 5,
+  maxAttempts = 3,
 ): Promise<T> {
-  const delays = [0, 4000, 12000, 30000, 60000]; // 0s, 4s, 12s, 30s, 60s
+  // Retry delays for transient errors other than rate-limit (network blips, etc.)
+  const delays = [0, 5000, 15000];
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       if (attempt > 0) {
-        const delay = delays[attempt] ?? 60000;
-        console.log(`[cdp] ${label} — rate limited, retry ${attempt}/${maxAttempts - 1} in ${delay / 1000}s…`);
+        const delay = delays[attempt] ?? 15000;
+        console.log(`[cdp] ${label} — retry ${attempt}/${maxAttempts - 1} in ${delay / 1000}s…`);
         await new Promise(r => setTimeout(r, delay));
       }
       return await fn();
     } catch (err: any) {
       const isLast = attempt === maxAttempts - 1;
-      if (isRateLimitError(err) && !isLast) continue;
-      throw err;
+      // Rate-limit errors should not be retried inside withRetry — the queue
+      // cool-down handles spacing; just surface the error so the caller backs off.
+      if (isRateLimitError(err) || isLast) throw err;
     }
   }
   throw new Error(`[cdp] ${label} — exhausted all retries`);
@@ -75,31 +111,36 @@ async function withRetry<T>(
 
 // ─── Wallet creation ──────────────────────────────────────────────────────────
 
-export async function createWallet(network = "base-mainnet"): Promise<CDPWalletResult> {
+async function _doCreateWallet(network: string, label: string): Promise<CDPWalletResult> {
   configureCDP();
-  return withRetry("createWallet", async () => {
+  console.log(`[cdp] creating wallet for ${label} on ${network}…`);
+  return withRetry(`createWallet(${label})`, async () => {
     const wallet = await Wallet.create({ networkId: network });
     const defaultAddress = await wallet.getDefaultAddress();
     const address = defaultAddress.getId();
     const walletId = wallet.getId() ?? "";
     const seed = JSON.stringify(await wallet.export());
+    console.log(`[cdp] wallet created for ${label}: ${address}`);
     return { walletId, address, network, seed };
   });
 }
 
-// Create agent wallet — logs agent name for traceability
-export async function createAgentWallet(
+export function createWallet(network = "base-mainnet"): Promise<CDPWalletResult> {
+  return queueWalletCreation("createWallet", () => _doCreateWallet(network, "anonymous"));
+}
+
+export function createAgentWallet(
   network = "base-mainnet",
   agentLabel?: string,
 ): Promise<CDPWalletResult> {
-  if (agentLabel) console.log(`[cdp] provisioning agent wallet for "${agentLabel}" on ${network}`);
-  return createWallet(network);
+  const label = agentLabel ?? "agent";
+  console.log(`[cdp] queueing wallet creation for "${label}"`);
+  return queueWalletCreation(`agent:${label}`, () => _doCreateWallet(network, label));
 }
 
-// Creates a wallet for a user, tagged with email for traceability
-export async function createUserWallet(email: string, network = "base-mainnet"): Promise<CDPWalletResult> {
-  console.log(`[cdp] provisioning user wallet for ${email} on ${network}`);
-  return createWallet(network);
+export function createUserWallet(email: string, network = "base-mainnet"): Promise<CDPWalletResult> {
+  console.log(`[cdp] queueing wallet creation for user ${email}`);
+  return queueWalletCreation(`user:${email}`, () => _doCreateWallet(network, email));
 }
 
 // ─── Wallet import & balances ─────────────────────────────────────────────────
@@ -131,7 +172,7 @@ export async function getWalletBalances(seed: string): Promise<WalletBalance[]> 
   }
 }
 
-// ─── Wallet sweep ──────────────────────────────────────────────────────────────
+// ─── Wallet sweep ─────────────────────────────────────────────────────────────
 
 export interface SweepResult {
   agentId: string;

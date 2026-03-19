@@ -22,6 +22,18 @@ export const agentsTable = pgTable("agents", {
   dailyLeadCount: integer("daily_lead_count").notNull().default(0),
   dailyCapResetAt: timestamp("daily_cap_reset_at").notNull().defaultNow(),
   paidSlotPrice: real("paid_slot_price").notNull().default(9.99),
+  // Dynamic pricing
+  pricingMode: text("pricing_mode").notNull().default("fixed"),   // "fixed" | "dynamic"
+  minPriceUsd: real("min_price_usd").notNull().default(4.99),
+  maxPriceUsd: real("max_price_usd").notNull().default(99.99),
+  surgeFactor: real("surge_factor").notNull().default(1.0),
+  // Flash sale
+  flashSaleEnabled: boolean("flash_sale_enabled").notNull().default(false),
+  flashSalePrice: real("flash_sale_price"),
+  flashSaleLabel: text("flash_sale_label"),
+  flashSaleEndsAt: timestamp("flash_sale_ends_at"),
+  flashSaleSeatsTotal: integer("flash_sale_seats_total"),
+  flashSaleSeatsSold: integer("flash_sale_seats_sold").notNull().default(0),
   leadApprovalMode: text("lead_approval_mode").notNull().default("manual"),
   nftMintEnabled: boolean("nft_mint_enabled").notNull().default(false),
   nftMintedAt: timestamp("nft_minted_at"),

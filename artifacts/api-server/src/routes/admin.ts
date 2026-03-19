@@ -23,6 +23,7 @@ import {
   payApprovedSplit,
 } from "../lib/commission-splitter.js";
 import { commissionSplitsTable, usdcPaymentRequestsTable } from "@workspace/db/schema";
+import { calculateCurrentPrice } from "../lib/pricing.js";
 
 const router = Router();
 
@@ -791,12 +792,10 @@ router.post("/admin/agents/provision-all-wallets", requireAdmin, async (req, res
     // Respond immediately — provision in background
     res.json({ ok: true, message: `Provisioning wallets for ${needsWallet.length} agent(s) in background`, provisioning: needsWallet.map(a => a.slug) });
 
-    // Background loop — 5s delay between each to stay under CDP rate limit
-    const { createAgentWallet } = await import("../lib/cdp.js");
+    // Background loop — queue serializes all creation calls with a 70s cool-down
     for (const agent of needsWallet) {
       try {
-        await new Promise(r => setTimeout(r, 5000));
-        const wallet = await createAgentWallet(agent.slug);
+        const wallet = await createAgentWallet("base-mainnet", agent.slug);
         await db.update(agentsTable).set({
           cdpWalletId: wallet.walletId,
           cdpWalletAddress: wallet.address,
