@@ -35,7 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
   ShieldAlert, Trash2, CheckCircle, XCircle, Bot, Zap, Play,
-  RefreshCw, Activity, Users, Clock, ChevronDown, ChevronUp, Eye,
+  RefreshCw, Activity, Users, Clock, ChevronDown, ChevronUp, Eye, EyeOff,
   AlertTriangle, ToggleLeft, ToggleRight, Mail, Send, BarChart2,
   Check, Ban, Copy, Plus, Minus, Wallet, Gem, PauseCircle, PlayCircle,
   Settings2, ExternalLink, Plug, Link2, MessageSquare, Loader2,
@@ -1535,6 +1535,12 @@ function AgentsFleetTab({ token }: { token: string | null }) {
     onSuccess: () => { toast({ title: "Updated" }); qc.invalidateQueries({ queryKey: ["admin-fleet"] }); },
   });
 
+  const toggleActive = useMutation({
+    mutationFn: (agent: { id: string; isActive: boolean }) =>
+      fetch(`/api/admin/agents/${agent.id}`, { method: "PUT", headers, body: JSON.stringify({ isActive: !agent.isActive }) }).then(r => r.json()),
+    onSuccess: (_, vars) => { toast({ title: vars.isActive ? "Hidden from directory" : "Now listed in directory" }); qc.invalidateQueries({ queryKey: ["admin-fleet"] }); },
+  });
+
   const mintAgent = useMutation({
     mutationFn: (id: string) => fetch(`/api/admin/agents/${id}/mint`, { method: "POST", headers }).then(r => r.json()),
     onSuccess: (data: any) => { toast({ title: data.message || "Mint updated" }); qc.invalidateQueries({ queryKey: ["admin-fleet"] }); },
@@ -1713,6 +1719,11 @@ function AgentsFleetTab({ token }: { token: string | null }) {
                     <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                       onClick={() => { setExpanded(expanded === agent.id ? null : agent.id); setEditingId(null); }}>
                       {expanded === agent.id ? <ChevronUp className="w-3 h-3" /> : <Settings2 className="w-3 h-3" />}
+                    </Button>
+                    <Button size="sm" variant="outline" className={`h-7 px-2 text-xs ${agent.isActive ? "border-green-500/40" : "border-border/40"}`}
+                      onClick={() => toggleActive.mutate({ id: agent.id, isActive: agent.isActive })} disabled={toggleActive.isPending}
+                      title={agent.isActive ? "Listed in directory — click to hide" : "Hidden from directory — click to list"}>
+                      {agent.isActive ? <Eye className="w-3 h-3 text-green-400" /> : <EyeOff className="w-3 h-3 text-muted-foreground" />}
                     </Button>
                     <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                       onClick={() => togglePause.mutate(agent.id)} disabled={togglePause.isPending}>

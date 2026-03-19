@@ -70,7 +70,7 @@ function ComposioTool({ tool, onConnect, isConnecting }: { tool: Tool; onConnect
   );
 }
 
-function ReferralRotatorCard({ userSlug, token }: { userSlug: string; token: string | null }) {
+function ReferralRotatorCard({ userSlug, referralCode, token }: { userSlug: string; referralCode: string; token: string | null }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery<{ referrals: ReferralEntry[] }>({
@@ -268,6 +268,7 @@ export default function Dashboard() {
 
   const activeSlotCount = slotsRes?.slots.filter(s => s.status === "active").length || 0;
   const userSlug = agentData?.user.slug ?? "";
+  const referralCode = agentData?.user.referralCode ?? userSlug;
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">

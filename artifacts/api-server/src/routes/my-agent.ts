@@ -222,7 +222,7 @@ router.post("/my-agent/composio/connect", requireAuth, async (req, res) => {
 router.get("/agents", async (req, res) => {
   try {
     const now = new Date();
-    const agents = await db.select().from(agentsTable);
+    const agents = await db.select().from(agentsTable).where(eq(agentsTable.isActive, true));
 
     const enriched = await Promise.all(agents.map(async (agent) => {
       const { count } = await import("drizzle-orm");
