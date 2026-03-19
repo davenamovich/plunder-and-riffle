@@ -22,8 +22,7 @@ export default function AgentPage() {
   });
 
   const handleRedirect = () => {
-    // We redirect to the API endpoint which issues a 302
-    window.open(`/api/rotator/redirect/${slug}`, "_blank");
+    window.location.href = `/join/${slug}`;
   };
 
   if (isLoadingAgent) {
