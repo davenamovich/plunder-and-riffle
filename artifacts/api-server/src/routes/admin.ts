@@ -450,14 +450,28 @@ router.get("/admin/agents-fleet", requireAdmin, async (req, res) => {
 
 router.post("/admin/agents", requireAdmin, async (req, res) => {
   try {
-    const { slug, name, description, offerUrl, freeSlotCapacity, paidSlotCapacity, slotDurationHours, dailyCap, paidSlotPrice, email } = req.body;
+    const {
+      slug, name, description, offerUrl,
+      freeSlotCapacity, paidSlotCapacity, slotDurationHours, dailyCap, paidSlotPrice, email,
+      persona, icpContext, postTemplates, characterPrompt, twitterHandle,
+    } = req.body;
     if (!slug || !name || !offerUrl) { res.status(400).json({ error: "slug, name, offerUrl required" }); return; }
 
+    // Ensure slug is unique by appending suffix if needed
+    let finalSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "");
+    const existing = await db.select({ id: agentsTable.id }).from(agentsTable).where(eq(agentsTable.slug, finalSlug)).limit(1).then(r => r[0]);
+    if (existing) finalSlug = `${finalSlug}-${Math.random().toString(36).slice(2, 5)}`;
+
     const [agent] = await db.insert(agentsTable).values({
-      slug: slug.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
+      slug: finalSlug,
       name, description: description || null, offerUrl,
       freeSlotCapacity: freeSlotCapacity || 25, paidSlotCapacity: paidSlotCapacity || 25,
       slotDurationHours: slotDurationHours || 24, dailyCap: dailyCap || 100, paidSlotPrice: paidSlotPrice || 9.99,
+      persona: persona || null,
+      icpContext: icpContext || null,
+      postTemplates: postTemplates || null,
+      characterPrompt: characterPrompt || null,
+      twitterHandle: twitterHandle || null,
     }).returning();
 
     // Auto-provision CDP wallet if credentials are configured
@@ -494,8 +508,12 @@ router.put("/admin/agents/:id", requireAdmin, async (req, res) => {
   try {
     const agent = await db.select().from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
     if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
-    const allowed = ["name","description","offerUrl","fallbackUrl","freeSlotCapacity","paidSlotCapacity",
-                     "slotDurationHours","dailyCap","paidSlotPrice","leadApprovalMode","isPaused","isActive"];
+    const allowed = [
+      "name","description","offerUrl","fallbackUrl","freeSlotCapacity","paidSlotCapacity",
+      "slotDurationHours","dailyCap","paidSlotPrice","leadApprovalMode","isPaused","isActive",
+      "persona","icpContext","postTemplates","characterPrompt","twitterHandle",
+      "engineEnabled","engineScheduleHours","avatarUrl",
+    ];
     const updates: any = {};
     for (const key of allowed) { if (req.body[key] !== undefined) updates[key] = req.body[key]; }
     const [updated] = await db.update(agentsTable).set({ ...updates, updatedAt: new Date() })
