@@ -2,13 +2,13 @@ import { useEffect } from "react";
 import { useRoute } from "wouter";
 
 export default function PersonalRotator() {
-  const [, params] = useRoute("/r/:userSlug");
-  const userSlug = params?.userSlug;
+  const [, params] = useRoute("/r/:referralCode");
+  const referralCode = params?.referralCode;
 
   useEffect(() => {
-    if (userSlug) sessionStorage.setItem("btc_ref", userSlug);
+    if (referralCode) sessionStorage.setItem("btc_ref", referralCode.toUpperCase());
     window.location.replace("/agents");
-  }, [userSlug]);
+  }, [referralCode]);
 
   return null;
 }
