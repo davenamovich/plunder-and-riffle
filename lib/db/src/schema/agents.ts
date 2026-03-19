@@ -57,6 +57,10 @@ export const agentsTable = pgTable("agents", {
   characterImageUrl: text("character_image_url"),
   // Discord webhook — agents post directly to a Discord channel (no OAuth needed)
   discordWebhookUrl: text("discord_webhook_url"),
+  // Commission & treasury (global config stored on ralph; per-agent override for sweep threshold)
+  botOpsSweepThresholdUsd: real("bot_ops_sweep_threshold_usd").notNull().default(10),
+  protocolWalletAddress: text("protocol_wallet_address"),
+  adminWalletAddress: text("admin_wallet_address"),
   // Agent Engine
   engineEnabled: boolean("engine_enabled").notNull().default(false),
   enginePublic: boolean("engine_public").notNull().default(false),

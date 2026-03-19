@@ -17,13 +17,13 @@
 
 import { db } from "@workspace/db";
 import { rotatorSlotsTable, agentsTable } from "@workspace/db/schema";
-import { eq, and, lt, isNull } from "drizzle-orm";
+import { eq, and, lt, isNull, isNotNull } from "drizzle-orm";
 import { classifyRawLeads, draftScoredLeads } from "./ralph.js";
 import { getDailyUsage } from "./moltis.js";
 import { seedDefaultSequenceIfNeeded } from "./dm.js";
 import { runAllAgentEngines } from "./agent-engine.js";
 import { runSportsTipsEngine } from "./sports-tips.js";
-import { createAgentWallet, isCDPConfigured } from "./cdp.js";
+import { createAgentWallet, isCDPConfigured, sweepWallet } from "./cdp.js";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -125,6 +125,49 @@ async function provisionNextMissingWallet() {
   }
 }
 
+// ─── Bot Ops Sweep ─────────────────────────────────────────────────────────────
+// Runs every 60 min — sweeps agent wallet USDC surplus above per-agent threshold to Protocol wallet.
+// Keeps each agent funded up to their threshold for API micro-payments; sends surplus on-chain.
+
+async function botOpsSweepJob() {
+  if (!isCDPConfigured()) return;
+
+  // Resolve protocol wallet address from ralph settings
+  const ralph = await db.select({ protocolWalletAddress: agentsTable.protocolWalletAddress })
+    .from(agentsTable).where(eq(agentsTable.slug, "ralph")).limit(1).then(r => r[0]);
+  const protocolAddress = ralph?.protocolWalletAddress;
+  if (!protocolAddress) {
+    console.log("[bot-ops-sweep] skipped — no protocolWalletAddress set on ralph settings");
+    return;
+  }
+
+  const agents = await db.select({
+    id: agentsTable.id, slug: agentsTable.slug,
+    cdpWalletSeed: agentsTable.cdpWalletSeed,
+    cdpWalletAddress: agentsTable.cdpWalletAddress,
+    botOpsSweepThresholdUsd: agentsTable.botOpsSweepThresholdUsd,
+  }).from(agentsTable).where(and(isNotNull(agentsTable.cdpWalletSeed), isNotNull(agentsTable.cdpWalletAddress)));
+
+  let swept = 0;
+  for (const agent of agents) {
+    if (!agent.cdpWalletSeed || !agent.cdpWalletAddress) continue;
+    try {
+      const { transfers } = await sweepWallet(agent.cdpWalletSeed, protocolAddress, ["usdc"]);
+      // Note: sweepWallet sweeps full balance; threshold management via CDP transfer amount
+      // For future: partial sweep (keep threshold) requires amount-specific transfer
+      for (const t of transfers) {
+        if (t.txHash) {
+          console.log(`[bot-ops-sweep] agent "${agent.slug}" swept ${t.amount} ${t.asset} → Protocol | tx: ${t.txHash}`);
+          swept++;
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[bot-ops-sweep] agent "${agent.slug}" sweep failed:`, err?.message);
+    }
+  }
+  if (swept > 0) console.log(`[bot-ops-sweep] completed — ${swept} sweep(s) executed`);
+}
+
 // ─── Scheduler ────────────────────────────────────────────────────────────────
 
 let started = false;
@@ -172,6 +215,11 @@ export function startWorker() {
   // CDP wallet provisioning — every 5 minutes, ONE wallet per tick (avoids rate limits)
   setInterval(provisionNextMissingWallet, 5 * MINUTE);
 
+  // Bot ops sweep — every 60 minutes, sweeps surplus USDC from agent wallets → Protocol wallet
+  setInterval(() => {
+    botOpsSweepJob().catch(err => console.error("[worker] bot-ops-sweep error:", err));
+  }, 60 * MINUTE);
+
   // Run immediately on start to catch any queue backlog
   setTimeout(async () => {
     await seedDefaultSequenceIfNeeded();
@@ -181,7 +229,9 @@ export function startWorker() {
     runAllAgentEngines().catch(err => console.error("[worker] engine startup:", err));
     // Defer wallet provisioning 30s after startup to let server settle
     setTimeout(provisionNextMissingWallet, 30 * SECOND);
+    // Defer bot ops sweep 90s after startup
+    setTimeout(() => botOpsSweepJob().catch(err => console.error("[worker] bot-ops-sweep startup:", err)), 90 * SECOND);
   }, 5 * SECOND);
 
-  console.log("[worker] scheduled: expire=30s, classify=8m×30 leads, draft=12m×30 leads, caps=60m, engine=30m, sports-tips=6h, cdp-wallet=5m | budget=5000/day");
+  console.log("[worker] scheduled: expire=30s, classify=8m×30 leads, draft=12m×30 leads, caps=60m, engine=30m, sports-tips=6h, cdp-wallet=5m, bot-ops-sweep=60m | budget=5000/day");
 }

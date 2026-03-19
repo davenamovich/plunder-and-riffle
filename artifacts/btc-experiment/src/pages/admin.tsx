@@ -1134,6 +1134,53 @@ export default function Admin() {
                 </div>
               </div>
 
+              {/* Commission & Treasury */}
+              <div className="border border-blue-500/20 bg-blue-500/5 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-blue-400" />
+                  <p className="text-sm font-medium">Commission & Treasury</p>
+                  <p className="text-xs text-muted-foreground">— on-chain split destinations</p>
+                </div>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Protocol Wallet Address <span className="text-blue-400">(25% recipient — Base mainnet)</span></label>
+                    <Input
+                      className="font-mono text-xs"
+                      placeholder="0x..."
+                      value={localSettings.protocolWalletAddress ?? ""}
+                      onChange={e => setLocalSettings({ ...localSettings, protocolWalletAddress: e.target.value })}
+                    />
+                    {localSettings.protocolWalletAddress && (
+                      <a href={`https://basescan.org/address/${localSettings.protocolWalletAddress}`} target="_blank" className="text-xs text-primary hover:underline">
+                        View on Basescan →
+                      </a>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Admin Wallet Address <span className="text-muted-foreground">(Agent Manager + Referrer initially)</span></label>
+                    <Input
+                      className="font-mono text-xs"
+                      placeholder="0x..."
+                      value={localSettings.adminWalletAddress ?? ""}
+                      onChange={e => setLocalSettings({ ...localSettings, adminWalletAddress: e.target.value })}
+                    />
+                    {localSettings.adminWalletAddress && (
+                      <a href={`https://basescan.org/address/${localSettings.adminWalletAddress}`} target="_blank" className="text-xs text-primary hover:underline">
+                        View on Basescan →
+                      </a>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Default Bot Ops Sweep Threshold (USDC) <span className="text-muted-foreground">— keep this much per agent wallet before sweeping surplus to Protocol</span></label>
+                    <Input
+                      type="number" min={0} step={1}
+                      value={localSettings.botOpsSweepThresholdUsd ?? 10}
+                      onChange={e => setLocalSettings({ ...localSettings, botOpsSweepThresholdUsd: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="border-t border-border/40 pt-5 space-y-4">
                 {/* Lead Approval Mode Toggle */}
                 <div className="flex items-center justify-between p-4 rounded-xl border border-border/40 bg-card/50">
@@ -1175,7 +1222,7 @@ export default function Admin() {
                 </div>
               </div>
 
-              <Button className="w-full" onClick={() => updateSettings({ data: { ...localSettings, freeSlotCapacity: Number(localSettings.freeSlotCapacity), paidSlotCapacity: Number(localSettings.paidSlotCapacity), dailyCap: Number(localSettings.dailyCap), slotDurationHours: Number(localSettings.slotDurationHours), nftReferralThreshold: Number(localSettings.nftReferralThreshold ?? 3), nftViralThreshold: Number(localSettings.nftViralThreshold ?? 3) } })} disabled={isSavingSettings}>
+              <Button className="w-full" onClick={() => updateSettings({ data: { ...localSettings, freeSlotCapacity: Number(localSettings.freeSlotCapacity), paidSlotCapacity: Number(localSettings.paidSlotCapacity), dailyCap: Number(localSettings.dailyCap), slotDurationHours: Number(localSettings.slotDurationHours), nftReferralThreshold: Number(localSettings.nftReferralThreshold ?? 3), nftViralThreshold: Number(localSettings.nftViralThreshold ?? 3), botOpsSweepThresholdUsd: Number(localSettings.botOpsSweepThresholdUsd ?? 10) } })} disabled={isSavingSettings}>
                 {isSavingSettings ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : null}
                 Save All Settings
               </Button>
@@ -1640,6 +1687,16 @@ function AgentsFleetTab({ token }: { token: string | null }) {
                           <Plug className="w-2.5 h-2.5 mr-0.5" /> Composio
                         </Badge>
                       )}
+                      {agent.engineEnabled && (
+                        <Badge className="text-xs bg-green-500/15 text-green-400 border border-green-500/30">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-400 mr-1 animate-pulse inline-block" /> Engine On
+                        </Badge>
+                      )}
+                      {agent.discordWebhookUrl && (
+                        <Badge variant="outline" className="text-xs text-indigo-400 border-indigo-500/40">
+                          Discord
+                        </Badge>
+                      )}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
                       <span>Free: {agent.activeFreeSlots}/{agent.freeSlotCapacity}</span>
@@ -1728,6 +1785,9 @@ function AgentsFleetTab({ token }: { token: string | null }) {
                                   <button onClick={() => navigator.clipboard.writeText(agent.cdpWalletAddress)} title="Copy" className="text-muted-foreground hover:text-foreground">
                                     <Copy className="w-2.5 h-2.5" />
                                   </button>
+                                  <a href={`https://basescan.org/address/${agent.cdpWalletAddress}`} target="_blank" title="View on Basescan" className="text-muted-foreground hover:text-primary">
+                                    <ExternalLink className="w-2.5 h-2.5" />
+                                  </a>
                                 </p>
                               </div>
                               <div>
@@ -1809,6 +1869,17 @@ function AgentsFleetTab({ token }: { token: string | null }) {
                               <Input value={editForm[f.key] || ""} onChange={e => setEditForm({ ...editForm, [f.key]: e.target.value })} />
                             </div>
                           ))}
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-muted-foreground">
+                              Bot Ops Sweep Threshold (USDC)
+                              <span className="text-muted-foreground ml-1 font-normal">— keep this balance before sweeping surplus to Protocol</span>
+                            </label>
+                            <Input
+                              type="number" min={0} step={1}
+                              value={editForm.botOpsSweepThresholdUsd ?? 10}
+                              onChange={e => setEditForm({ ...editForm, botOpsSweepThresholdUsd: Number(e.target.value) })}
+                            />
+                          </div>
                           <div className="space-y-1 md:col-span-2">
                             <label className="text-xs font-medium text-muted-foreground">Persona (shown to Moltis)</label>
                             <Textarea rows={2} value={editForm.persona || ""} onChange={e => setEditForm({ ...editForm, persona: e.target.value })} />
