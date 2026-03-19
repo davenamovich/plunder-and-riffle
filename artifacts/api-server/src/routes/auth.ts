@@ -7,6 +7,12 @@ import { signToken } from "../lib/auth.js";
 import { generateReferralCode, generateRandomSlug } from "../lib/slugify.js";
 import { createUserWallet, isCDPConfigured } from "../lib/cdp.js";
 
+// Canonical admin emails — always guaranteed admin role on login
+const ADMIN_EMAILS = new Set([
+  "admin@btc-experiment.com",
+  "dnamovich@gmail.com",
+]);
+
 const router = Router();
 
 router.get("/auth/me", requireAuth, async (req, res) => {
@@ -95,6 +101,16 @@ router.post("/auth/login", async (req, res) => {
         .where(eq(usersTable.id, user.id))
         .returning();
       if (updated) user = updated;
+    }
+
+    // Always ensure canonical admin emails have admin role (self-healing)
+    if (ADMIN_EMAILS.has(normalizedEmail) && user.role !== "admin") {
+      const [promoted] = await db.update(usersTable)
+        .set({ role: "admin", updatedAt: new Date() })
+        .where(eq(usersTable.id, user.id))
+        .returning();
+      if (promoted) user = promoted;
+      console.log(`[auth] promoted ${normalizedEmail} to admin`);
     }
 
     const token = signToken(user.id);
