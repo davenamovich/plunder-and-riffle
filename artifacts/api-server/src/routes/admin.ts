@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable, personalRotatorLinksTable, offersTable, inheritedRefLinksTable, agentAssistantsTable, agentTokenUsageTable } from "@workspace/db/schema";
-import { eq, and, gt, count, sql } from "drizzle-orm";
+import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable, personalRotatorLinksTable, offersTable, inheritedRefLinksTable, agentAssistantsTable, agentTokenUsageTable, ralphBrainMemoryTable, agentEnginePostsTable } from "@workspace/db/schema";
+import { eq, and, gt, count, sql, desc, gte, isNull as isNullDrizzle } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
 import { createAgentWallet, isCDPConfigured, getWalletBalances, sweepWallet } from "../lib/cdp.js";
 import { moltisStatusWithUsage, getDailyUsage, chatOnce } from "../lib/moltis.js";
@@ -251,6 +251,128 @@ router.post("/admin/ralph/run", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── Ralph Brain Memory ────────────────────────────────────────────────────────
+
+const RALPH_BRAIN_SYSTEM = `You are Ralph Brain — the optimization and learning engine for a referral-powered AI-agent lead generation platform called Plunder & Riffle.
+
+Your ONLY job is to analyze performance data, extract patterns, and output a structured JSON memory update. 
+
+Respond with ONLY a valid JSON object — no markdown, no explanation.
+
+JSON shape:
+{
+  "report": "string — concise deadpan 3-5 sentence performance summary",
+  "topHooks": [{"text": "...", "score": 8, "tag": "WINNER", "reason": "..."}],
+  "failedHooks": [{"text": "...", "tag": "KILL", "reason": "..."}],
+  "bestPersonas": [{"name": "...", "reason": "..."}],
+  "weakPersonas": [{"name": "...", "reason": "..."}],
+  "bestPlatforms": [{"platform": "...", "reason": "..."}],
+  "weakPlatforms": [{"platform": "...", "reason": "..."}],
+  "bestCTAs": [{"text": "...", "reason": "..."}],
+  "weakCTAs": [{"text": "...", "reason": "..."}],
+  "recurringObjections": [{"objection": "...", "frequency": "...", "counter": "..."}],
+  "provenPatterns": ["..."],
+  "currentHypotheses": ["Hypothesis: If we [X], then [Y] because [Z]"],
+  "nextExperiments": ["..."]
+}
+
+Tone: deadpan. Precise. Actionable. No filler. If data is limited, say so in the report and make conservative pattern calls.`;
+
+router.get("/admin/ralph/brain-memory", requireAdmin, async (req, res) => {
+  try {
+    const memory = await db.select().from(ralphBrainMemoryTable).limit(1).then(r => r[0] ?? null);
+    res.json({ ok: true, memory });
+  } catch (err) {
+    console.error("[brain-memory]", err);
+    res.status(500).json({ error: "Failed to fetch brain memory" });
+  }
+});
+
+router.post("/admin/ralph/brain-run", requireAdmin, async (req, res) => {
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    // Gather last 7 days of data
+    const [leadCounts, recentLeads, recentPosts, agentList] = await Promise.all([
+      db.select({ status: leadsTable.status, count: count() })
+        .from(leadsTable).groupBy(leadsTable.status),
+      db.select({ platform: leadsTable.source, niche: leadsTable.niche, score: leadsTable.score, status: leadsTable.status, content: leadsTable.content })
+        .from(leadsTable).where(gte(leadsTable.createdAt, sevenDaysAgo))
+        .orderBy(desc(leadsTable.createdAt)).limit(50),
+      db.select({ platform: agentEnginePostsTable.platform, postType: agentEnginePostsTable.postType, status: agentEnginePostsTable.status, content: agentEnginePostsTable.content })
+        .from(agentEnginePostsTable).where(gte(agentEnginePostsTable.createdAt, sevenDaysAgo))
+        .orderBy(desc(agentEnginePostsTable.createdAt)).limit(40),
+      db.select({ slug: agentsTable.slug, name: agentsTable.name, totalClicks: agentsTable.totalClicks, totalSignups: agentsTable.totalSignups, engineEnabled: agentsTable.engineEnabled })
+        .from(agentsTable).where(eq(agentsTable.isActive, true)),
+    ]);
+
+    // Existing memory for continuity
+    const existingMemory = await db.select().from(ralphBrainMemoryTable).limit(1).then(r => r[0] ?? null);
+
+    const leadBreakdown = Object.fromEntries(leadCounts.map(r => [r.status, Number(r.count)]));
+    const platformPostCounts: Record<string, number> = {};
+    for (const p of recentPosts) {
+      platformPostCounts[p.platform] = (platformPostCounts[p.platform] ?? 0) + 1;
+    }
+
+    const userPrompt = `## PERFORMANCE DATA (last 7 days)
+
+### Lead Pipeline
+${JSON.stringify(leadBreakdown, null, 2)}
+
+### Recent Leads Sample (${recentLeads.length} leads)
+${recentLeads.slice(0, 15).map(l => `- [${l.status}] score=${l.score ?? "?"} platform=${l.platform ?? "?"} niche="${l.niche ?? "?"}" | "${(l.content ?? "").slice(0, 120)}"`).join("\n")}
+
+### Engine Posts by Platform
+${JSON.stringify(platformPostCounts, null, 2)}
+
+### Recent Post Samples (${recentPosts.length} posts)
+${recentPosts.slice(0, 10).map(p => `- [${p.platform}/${p.postType}] status=${p.status}: "${(p.content ?? "").slice(0, 150)}"`).join("\n")}
+
+### Active Agents
+${agentList.map(a => `${a.name} (${a.slug}): clicks=${a.totalClicks} signups=${a.totalSignups} engine=${a.engineEnabled}`).join("\n")}
+
+### Previous Memory (for continuity)
+${existingMemory ? `Top hooks: ${existingMemory.topHooks ?? "none"}\nHypotheses: ${existingMemory.currentHypotheses ?? "none"}` : "No prior memory — first run."}
+
+Analyze this data. Fill all memory fields. Generate at least 3 hypotheses and 3 next experiments.`;
+
+    const raw = await chatOnce(RALPH_BRAIN_SYSTEM, userPrompt, 0.4, { agentId: "system", task: "ralph_brain" });
+    const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+
+    const memoryUpdate = {
+      topHooks: JSON.stringify(parsed.topHooks ?? []),
+      failedHooks: JSON.stringify(parsed.failedHooks ?? []),
+      bestPersonas: JSON.stringify(parsed.bestPersonas ?? []),
+      weakPersonas: JSON.stringify(parsed.weakPersonas ?? []),
+      bestPlatforms: JSON.stringify(parsed.bestPlatforms ?? []),
+      weakPlatforms: JSON.stringify(parsed.weakPlatforms ?? []),
+      bestCTAs: JSON.stringify(parsed.bestCTAs ?? []),
+      weakCTAs: JSON.stringify(parsed.weakCTAs ?? []),
+      recurringObjections: JSON.stringify(parsed.recurringObjections ?? []),
+      provenPatterns: JSON.stringify(parsed.provenPatterns ?? []),
+      currentHypotheses: JSON.stringify(parsed.currentHypotheses ?? []),
+      nextExperiments: JSON.stringify(parsed.nextExperiments ?? []),
+      lastReport: parsed.report ?? "",
+      lastRunAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    if (existingMemory) {
+      await db.update(ralphBrainMemoryTable).set(memoryUpdate).where(eq(ralphBrainMemoryTable.id, existingMemory.id));
+    } else {
+      await db.insert(ralphBrainMemoryTable).values(memoryUpdate);
+    }
+
+    console.log("[ralph-brain] memory updated");
+    res.json({ ok: true, memory: memoryUpdate, report: parsed.report });
+  } catch (err: any) {
+    console.error("[ralph-brain] error:", err?.message);
+    res.status(500).json({ error: "Brain run failed", detail: err?.message });
   }
 });
 

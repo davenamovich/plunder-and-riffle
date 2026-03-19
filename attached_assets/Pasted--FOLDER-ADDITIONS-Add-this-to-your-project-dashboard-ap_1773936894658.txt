@@ -1,0 +1,155 @@
+🧱 FOLDER ADDITIONS
+
+Add this to your project:
+
+/dashboard
+  app.py
+  data.json
+  scorer.py
+  templates/
+    index.html
+🔢 1) data.json (your single source of truth)
+{
+  "experiments": [
+    {
+      "id": "EXP-001",
+      "hook": "AI is already replacing jobs quietly.",
+      "type": "pain",
+      "platform": "X",
+      "cta": "DM AI",
+      "impressions": 1200,
+      "clicks": 90,
+      "replies": 35,
+      "dms": 20,
+      "leads": 12,
+      "qualified_leads": 7,
+      "status": "active"
+    }
+  ]
+}
+
+👉 This is what Moltis updates
+👉 This is what Ralph reads
+
+🧠 2) scorer.py (Ralph’s brain logic)
+def score_experiment(exp):
+    score = 0
+
+    # Attention
+    if exp["impressions"] > 0:
+        ctr = exp["clicks"] / exp["impressions"]
+        score += ctr * 20
+
+    # Engagement
+    if exp["clicks"] > 0:
+        reply_rate = exp["replies"] / exp["clicks"]
+        score += reply_rate * 25
+
+    # Intent
+    if exp["replies"] > 0:
+        dm_rate = exp["dms"] / exp["replies"]
+        score += dm_rate * 25
+
+    # Conversion
+    if exp["dms"] > 0:
+        lead_rate = exp["leads"] / exp["dms"]
+        score += lead_rate * 20
+
+    # Quality
+    if exp["leads"] > 0:
+        quality = exp["qualified_leads"] / exp["leads"]
+        score += quality * 30
+
+    return round(score, 2)
+
+
+def classify(score):
+    if score >= 70:
+        return "SCALE"
+    elif score >= 40:
+        return "ITERATE"
+    elif score >= 20:
+        return "TEST"
+    else:
+        return "KILL"
+⚙️ 3) app.py (simple dashboard server)
+from flask import Flask, render_template
+import json
+from scorer import score_experiment, classify
+
+app = Flask(__name__)
+
+def load_data():
+    with open("data.json") as f:
+        return json.load(f)
+
+@app.route("/")
+def dashboard():
+    data = load_data()
+    experiments = data["experiments"]
+
+    enriched = []
+    for exp in experiments:
+        score = score_experiment(exp)
+        decision = classify(score)
+
+        exp["score"] = score
+        exp["decision"] = decision
+
+        enriched.append(exp)
+
+    # Sort by best performers
+    enriched = sorted(enriched, key=lambda x: x["score"], reverse=True)
+
+    return render_template("index.html", experiments=enriched)
+
+app.run(host="0.0.0.0", port=3000)
+🎨 4) templates/index.html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Ralph Dashboard</title>
+  <style>
+    body {
+      font-family: Arial;
+      background: #0f172a;
+      color: white;
+      padding: 20px;
+    }
+    .card {
+      background: #1e293b;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 10px;
+    }
+    .SCALE { color: #22c55e; }
+    .ITERATE { color: #eab308; }
+    .TEST { color: #3b82f6; }
+    .KILL { color: #ef4444; }
+  </style>
+</head>
+<body>
+
+<h1>🧠 Ralph Brain Dashboard</h1>
+
+{% for exp in experiments %}
+<div class="card">
+  <h3>{{ exp.hook }}</h3>
+
+  <p>Platform: {{ exp.platform }}</p>
+  <p>CTA: {{ exp.cta }}</p>
+
+  <p>Impressions: {{ exp.impressions }}</p>
+  <p>Clicks: {{ exp.clicks }}</p>
+  <p>Replies: {{ exp.replies }}</p>
+  <p>DMs: {{ exp.dms }}</p>
+  <p>Leads: {{ exp.leads }}</p>
+  <p>Qualified: {{ exp.qualified_leads }}</p>
+
+  <h2>Score: {{ exp.score }}</h2>
+  <h2 class="{{ exp.decision }}">Decision: {{ exp.decision }}</h2>
+</div>
+{% endfor %}
+
+</body>
+</html>

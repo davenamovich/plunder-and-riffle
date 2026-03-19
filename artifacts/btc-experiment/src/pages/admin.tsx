@@ -40,7 +40,7 @@ import {
   Check, Ban, Copy, Plus, Minus, Wallet, Gem, PauseCircle, PlayCircle,
   Settings2, ExternalLink, Plug, Link2, MessageSquare, Loader2,
   Tag, Edit3, Gift, ShieldCheck, UserPlus, UserMinus, UserCheck, ArrowRight,
-  Coins, PieChart, CircleDollarSign,
+  Coins, PieChart, CircleDollarSign, Brain,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -573,6 +573,9 @@ export default function Admin() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Ralph Brain */}
+          <RalphBrainCard token={token} />
         </TabsContent>
 
         {/* ── LEADS TAB ── */}
@@ -3484,6 +3487,221 @@ const RECIPIENT_LABELS: Record<string, string> = {
   bot_ops:       "Bot Ops",
   dev:           "Dev",
 };
+
+// ─── Ralph Brain Card ─────────────────────────────────────────────────────────
+
+function RalphBrainCard({ token }: { token: string | null }) {
+  const { toast } = useToast();
+  const headers = token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+
+  const { data: memData, isLoading: memLoading, refetch: refetchMem } = useQuery<{ ok: boolean; memory: any }>({
+    queryKey: ["ralph-brain-memory"],
+    queryFn: () => fetch("/api/admin/ralph/brain-memory", { headers }).then(r => r.json()),
+    staleTime: 60_000,
+    enabled: !!token,
+  });
+
+  const [running, setRunning] = React.useState(false);
+
+  async function runBrain() {
+    setRunning(true);
+    try {
+      const r = await fetch("/api/admin/ralph/brain-run", { method: "POST", headers });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error ?? "Brain run failed");
+      await refetchMem();
+      toast({ title: "Brain analysis complete", description: data.report?.slice(0, 120) });
+    } catch (e: any) {
+      toast({ title: "Brain run failed", description: e.message, variant: "destructive" });
+    } finally { setRunning(false); }
+  }
+
+  const mem = memData?.memory;
+
+  function parseField(field: string | null | undefined): any[] {
+    if (!field) return [];
+    try { return JSON.parse(field); } catch { return []; }
+  }
+
+  const hypotheses = parseField(mem?.currentHypotheses);
+  const experiments = parseField(mem?.nextExperiments);
+  const topHooks = parseField(mem?.topHooks);
+  const failedHooks = parseField(mem?.failedHooks);
+  const objections = parseField(mem?.recurringObjections);
+  const patterns = parseField(mem?.provenPatterns);
+  const bestPlatforms = parseField(mem?.bestPlatforms);
+  const bestCTAs = parseField(mem?.bestCTAs);
+
+  const TAG_COLOR: Record<string, string> = {
+    WINNER: "text-green-400 border-green-500/40 bg-green-500/10",
+    "TEST AGAIN": "text-amber-400 border-amber-500/40 bg-amber-500/10",
+    ITERATE: "text-blue-400 border-blue-500/40 bg-blue-500/10",
+    KILL: "text-red-400 border-red-500/40 bg-red-500/10",
+  };
+
+  return (
+    <Card className="border-green-500/20 bg-green-500/3">
+      <CardHeader className="flex flex-row items-start justify-between pb-3">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Brain className="w-4 h-4 text-green-400" /> Ralph Brain
+          </CardTitle>
+          <CardDescription className="mt-0.5">
+            {mem?.lastRunAt
+              ? `Last analysis: ${new Date(mem.lastRunAt).toLocaleString()}`
+              : "No analysis run yet. Click Run to initialize."}
+          </CardDescription>
+        </div>
+        <Button size="sm" onClick={runBrain} disabled={running || !token} className="gap-1.5 shrink-0">
+          {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
+          {running ? "Analyzing…" : "Run Analysis"}
+        </Button>
+      </CardHeader>
+
+      <CardContent className="space-y-5">
+        {memLoading && <Skeleton className="h-20 w-full" />}
+
+        {/* Report Summary */}
+        {mem?.lastReport && (
+          <div className="rounded-lg border border-green-500/20 bg-green-500/5 px-4 py-3">
+            <p className="text-xs font-medium text-green-400 uppercase tracking-wide mb-1.5">Performance Summary</p>
+            <p className="text-sm leading-relaxed text-foreground/90">{mem.lastReport}</p>
+          </div>
+        )}
+
+        {!mem && !memLoading && (
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            <Brain className="w-8 h-8 mx-auto mb-3 opacity-30" />
+            <p>Memory is empty. Run an analysis to initialize.</p>
+            <p className="text-xs mt-1 opacity-60">Ralph will scan leads, posts, and agent metrics from the last 7 days.</p>
+          </div>
+        )}
+
+        {mem && (
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Current Hypotheses */}
+            {hypotheses.length > 0 && (
+              <div className="md:col-span-2 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Current Hypotheses</p>
+                <div className="space-y-1.5">
+                  {hypotheses.map((h: string, i: number) => (
+                    <div key={i} className="flex gap-2 text-sm bg-muted/30 rounded-lg px-3 py-2 border border-border/30">
+                      <span className="text-primary font-mono text-xs shrink-0 mt-0.5">{i + 1}.</span>
+                      <span className="leading-snug">{h}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Next Experiments */}
+            {experiments.length > 0 && (
+              <div className="md:col-span-2 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next Experiments</p>
+                <div className="flex flex-wrap gap-2">
+                  {experiments.map((e: string, i: number) => (
+                    <div key={i} className="text-xs bg-primary/10 border border-primary/20 text-primary rounded-full px-3 py-1">{e}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Top Hooks */}
+            {topHooks.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Top Hooks</p>
+                <div className="space-y-1.5">
+                  {topHooks.slice(0, 5).map((h: any, i: number) => (
+                    <div key={i} className="text-xs bg-muted/20 rounded-md px-3 py-2 border border-border/20 space-y-0.5">
+                      <div className="flex items-start gap-2">
+                        <span className={`shrink-0 text-[10px] font-bold border rounded px-1 py-0.5 ${TAG_COLOR[h.tag] ?? "text-muted-foreground border-border/40"}`}>{h.tag}</span>
+                        <span className="leading-snug font-medium">{h.text}</span>
+                      </div>
+                      {h.reason && <p className="text-muted-foreground pl-10">{h.reason}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Failed Hooks */}
+            {failedHooks.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Failed Hooks</p>
+                <div className="space-y-1.5">
+                  {failedHooks.slice(0, 5).map((h: any, i: number) => (
+                    <div key={i} className="text-xs bg-red-500/5 rounded-md px-3 py-2 border border-red-500/20 space-y-0.5">
+                      <div className="flex items-start gap-2">
+                        <span className="shrink-0 text-[10px] font-bold border rounded px-1 py-0.5 text-red-400 border-red-500/40 bg-red-500/10">KILL</span>
+                        <span className="leading-snug text-muted-foreground line-through">{h.text}</span>
+                      </div>
+                      {h.reason && <p className="text-muted-foreground pl-10">{h.reason}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Recurring Objections */}
+            {objections.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recurring Objections</p>
+                <div className="space-y-1.5">
+                  {objections.map((o: any, i: number) => (
+                    <div key={i} className="text-xs bg-amber-500/5 rounded-md px-3 py-2 border border-amber-500/20 space-y-1">
+                      <p className="font-medium text-amber-400">"{o.objection}"</p>
+                      {o.counter && <p className="text-muted-foreground">→ {o.counter}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Proven Patterns + Best Platforms */}
+            <div className="space-y-4">
+              {patterns.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proven Patterns</p>
+                  <ul className="space-y-1">
+                    {patterns.map((p: string, i: number) => (
+                      <li key={i} className="text-xs text-foreground/80 flex gap-2"><span className="text-green-400">✓</span>{p}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {bestPlatforms.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Best Platforms</p>
+                  <div className="flex flex-wrap gap-2">
+                    {bestPlatforms.map((p: any, i: number) => (
+                      <div key={i} className="text-xs bg-muted/30 rounded px-2 py-1 border border-border/30">
+                        <span className="font-medium">{p.platform}</span>
+                        {p.reason && <span className="text-muted-foreground ml-1">— {p.reason}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {bestCTAs.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Best CTAs</p>
+                  <ul className="space-y-1">
+                    {bestCTAs.map((c: any, i: number) => (
+                      <li key={i} className="text-xs text-foreground/80 flex gap-2 items-start">
+                        <span className="text-primary shrink-0">→</span>
+                        <span>"{c.text}" {c.reason && <span className="text-muted-foreground">— {c.reason}</span>}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function CommissionSplitsTab({ token }: { token: string | null }) {
   const { toast } = useToast();
