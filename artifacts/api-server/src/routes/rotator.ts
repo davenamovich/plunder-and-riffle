@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import {
   agentsTable, rotatorSlotsTable, rotatorClicksTable,
-  usersTable, offersTable, offerSignupsTable, referralRotatorTable
+  usersTable, offersTable, offerSignupsTable, referralRotatorTable, leadsTable
 } from "@workspace/db/schema";
 import { eq, and, gt, count, sql } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../lib/auth.js";
@@ -91,6 +91,79 @@ router.get("/rotator/land/:agentSlug", async (req, res) => {
     });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /rotator/capture/:agentSlug — email funnel: capture lead + return next rotating URL
+router.post("/rotator/capture/:agentSlug", async (req, res) => {
+  try {
+    const { email } = req.body as { email?: string };
+    if (!email || !email.includes("@")) {
+      res.status(400).json({ error: "Valid email required" });
+      return;
+    }
+
+    const agent = await db.select().from(agentsTable).where(eq(agentsTable.slug, req.params.agentSlug)).limit(1).then(r => r[0]);
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+
+    const fallbackUrl = agent.fallbackUrl || agent.offerUrl || "https://plunderandriffle.com";
+
+    // Log lead (deduplicate by email+agent within 24h window — best effort)
+    try {
+      await db.insert(leadsTable).values({
+        source: "funnel",
+        externalId: `funnel:${agent.slug}:${email.toLowerCase()}:${Date.now()}`,
+        content: `Funnel capture — agent: ${agent.slug}`,
+        authorHandle: email.toLowerCase(),
+        status: "raw",
+      }).onConflictDoNothing();
+    } catch { /* non-fatal */ }
+
+    if (agent.isPaused) {
+      res.json({ redirectUrl: fallbackUrl });
+      return;
+    }
+
+    const now = new Date();
+    const activeSlots = await db.select({
+      slot: rotatorSlotsTable,
+      user: { id: usersTable.id, slug: usersTable.slug, email: usersTable.email },
+    })
+    .from(rotatorSlotsTable)
+    .innerJoin(usersTable, eq(rotatorSlotsTable.userId, usersTable.id))
+    .where(and(eq(rotatorSlotsTable.agentId, agent.id), eq(rotatorSlotsTable.status, "active"), gt(rotatorSlotsTable.expiresAt, now)));
+
+    if (!activeSlots.length) {
+      res.json({ redirectUrl: fallbackUrl });
+      return;
+    }
+
+    // Weighted random selection
+    const weightedPool: typeof activeSlots = [];
+    for (const s of activeSlots) {
+      const weight = s.slot.slotType === "paid" ? agent.paidSlotWeight : agent.freeSlotWeight;
+      for (let i = 0; i < weight; i++) weightedPool.push(s);
+    }
+    const chosen = weightedPool[Math.floor(Math.random() * weightedPool.length)];
+
+    // Increment click counts
+    await Promise.all([
+      db.update(rotatorSlotsTable).set({ clickCount: sql`${rotatorSlotsTable.clickCount} + 1` }).where(eq(rotatorSlotsTable.id, chosen.slot.id)),
+      db.update(agentsTable).set({ totalClicks: sql`${agentsTable.totalClicks} + 1` }).where(eq(agentsTable.id, agent.id)),
+    ]);
+
+    // Find chosen user's qualifying offer URL
+    const qualifying = await db.select({ offer: offersTable })
+      .from(offerSignupsTable)
+      .innerJoin(offersTable, eq(offerSignupsTable.offerId, offersTable.id))
+      .where(and(eq(offerSignupsTable.userId, chosen.user.id), eq(offersTable.isQualifying, true)))
+      .limit(1).then(r => r[0]);
+
+    const redirectUrl = qualifying?.offer?.offerUrl || agent.offerUrl || fallbackUrl;
+    res.json({ redirectUrl, referrerSlug: chosen.user.slug });
+  } catch (err) {
+    console.error("[rotator/capture]", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
