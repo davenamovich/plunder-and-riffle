@@ -202,7 +202,7 @@ router.post("/my-agent/composio/connect", requireAuth, async (req, res) => {
 
     const appName = platform; // Composio app names match our platform IDs
     const appUrl = process.env.APP_URL || "https://plunderandriffle.com";
-    const redirectUrl = `${appUrl}/my-agent?composio_connected=1`;
+    const redirectUrl = `${appUrl}/dashboard?composio_connected=1`;
 
     const oauthUrl = await initiateComposioConnection(entityId, appName, redirectUrl);
 

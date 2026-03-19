@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, LogOut, Activity, Bot } from "lucide-react";
+import { LayoutDashboard, LogOut, Activity } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user, login, logout } = useAuth();
@@ -40,15 +40,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <>
                 <div className="h-4 w-px bg-border hidden md:block" />
 
-                <Link href="/my-agent">
-                  <Button variant="ghost" size="sm" className={`hidden sm:flex gap-1.5 ${location.startsWith("/my-agent") ? "text-primary" : ""}`}>
-                    <Bot className="w-4 h-4" />
-                    My Agent
-                  </Button>
-                </Link>
-
                 <Link href="/dashboard">
-                  <Button variant="ghost" size="sm" className={`hidden md:flex gap-1.5 ${location === "/dashboard" ? "text-primary" : ""}`}>
+                  <Button variant="ghost" size="sm" className={`hidden md:flex gap-1.5 ${location.startsWith("/dashboard") || location.startsWith("/my-agent") ? "text-primary" : ""}`}>
                     <LayoutDashboard className="w-4 h-4" />
                     Dashboard
                   </Button>
