@@ -61,5 +61,5 @@
 
 ## Completed Features
 - ✅ **6-digit referral codes**: Changed from slug-based to numeric 6-digit format (e.g., `123456`). Referral links are `/r/123456`
-- ✅ **Bot agent auto-assignment**: New users auto-assigned to "bot" agent via rotator slots (30-day free slots) in `/api/auth/privy-login`
 - ✅ **Admin navigation**: Added Home, Agents, Dashboard buttons to admin page header
+- ✅ **Slot duration 24 hours**: All rotator slots expire in 24 hours
