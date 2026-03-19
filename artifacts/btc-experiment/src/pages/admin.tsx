@@ -430,6 +430,9 @@ export default function Admin() {
           <TabsTrigger value="tokens" className="flex items-center gap-1.5">
             <Activity className="w-3.5 h-3.5" /> Tokens
           </TabsTrigger>
+          <TabsTrigger value="fleet-metrics" className="flex items-center gap-1.5">
+            <Wallet className="w-3.5 h-3.5" /> Fleet
+          </TabsTrigger>
         </TabsList>
 
         {/* ── RALPH TAB ── */}
@@ -1194,6 +1197,10 @@ export default function Admin() {
 
         <TabsContent value="tokens">
           <TokenUsageTab token={token} />
+        </TabsContent>
+
+        <TabsContent value="fleet-metrics">
+          <AgentFleetMetricsTab token={token} />
         </TabsContent>
 
       </Tabs>
@@ -2580,6 +2587,337 @@ function TokenUsageTab({ token }: { token: string | null }) {
           <p className="pt-1 text-[11px]">Token tracking began after this version was deployed. Historical calls are not included.</p>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// ─── Agent Fleet Metrics Tab ──────────────────────────────────────────────────
+
+interface WalletEntry {
+  agentId: string; agentName: string; agentSlug: string;
+  walletId: string | null; address: string | null; network: string;
+  balances: { asset: string; amount: string; amountNumber: number }[];
+  createdAt: string | null;
+}
+
+interface FleetData {
+  wallets: WalletEntry[]; totalAgents: number;
+  walletsProvisioned: number; walletsWithBalance: number;
+}
+
+interface AgentMetrics {
+  agent: {
+    id: string; name: string; slug: string; isPaused: boolean; isActive: boolean;
+    createdAt: string; cdpWalletAddress: string | null; cdpWalletNetwork: string | null;
+    cdpWalletCreatedAt: string | null; engineEnabled: boolean; engineLastRunAt: string | null;
+  };
+  leads: { total: number; byStatus: Record<string, number> };
+  tokens: { byTask: { task: string; calls: number; totalTokens: number }[]; totalTokens: number };
+  wallet: { balances: { asset: string; amount: string; amountNumber: number }[]; hasWallet: boolean };
+  referrals: { signups: number };
+}
+
+function AgentFleetMetricsTab({ token }: { token: string | null }) {
+  const { toast } = useToast();
+  const [sweepAddress, setSweepAddress] = useState(import.meta.env.VITE_TREASURY_ADDRESS ?? "");
+  const [sweeping, setSweeping] = useState(false);
+  const [sweepResult, setSweepResult] = useState<any>(null);
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [metricsCache, setMetricsCache] = useState<Record<string, AgentMetrics>>({});
+
+  const { data: fleet, isLoading: fleetLoading, refetch: refetchFleet } = useQuery<FleetData>({
+    queryKey: ["admin-agent-wallets"],
+    queryFn: async () => {
+      const r = await fetch("/api/admin/agent-wallets", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    },
+    enabled: !!token,
+    refetchInterval: false,
+  });
+
+  async function loadAgentMetrics(agentId: string) {
+    if (metricsCache[agentId]) { setSelectedAgent(agentId); return; }
+    try {
+      const r = await fetch(`/api/admin/agents/${agentId}/metrics`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const data = await r.json();
+      setMetricsCache(prev => ({ ...prev, [agentId]: data }));
+      setSelectedAgent(agentId);
+    } catch (e: any) {
+      toast({ title: "Failed to load metrics", description: e.message, variant: "destructive" });
+    }
+  }
+
+  async function doSweep() {
+    if (!sweepAddress.trim()) { toast({ title: "Treasury address required", variant: "destructive" }); return; }
+    setSweeping(true); setSweepResult(null);
+    try {
+      const r = await fetch("/api/admin/agent-wallets/sweep", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ toAddress: sweepAddress.trim(), assets: ["eth", "usdc"] }),
+      });
+      const data = await r.json();
+      setSweepResult(data);
+      if (data.swept > 0) toast({ title: `Swept ${data.swept} wallet(s) ✓` });
+      else toast({ title: "No balances found to sweep", variant: "default" });
+      refetchFleet();
+    } catch (e: any) {
+      toast({ title: "Sweep failed", description: e.message, variant: "destructive" });
+    } finally { setSweeping(false); }
+  }
+
+  const selectedMetrics = selectedAgent ? metricsCache[selectedAgent] : null;
+  const fmt = (n: number | null | undefined) => (n ?? 0).toLocaleString();
+
+  return (
+    <div className="space-y-6">
+
+      {/* Fleet Summary */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: "Total Agents", value: fleet?.totalAgents ?? "—" },
+          { label: "Wallets Provisioned", value: fleet?.walletsProvisioned ?? "—" },
+          { label: "Wallets With Balance", value: fleet?.walletsWithBalance ?? "—" },
+        ].map(s => (
+          <Card key={s.label}>
+            <CardContent className="pt-5 text-center">
+              <div className="text-2xl font-bold tabular-nums">{s.value}</div>
+              <div className="text-xs text-muted-foreground mt-1">{s.label}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Wallet Fleet Table */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between py-4">
+          <div>
+            <CardTitle className="text-base">Agent Wallets</CardTitle>
+            <CardDescription className="text-xs">Live on-chain balances — Base mainnet</CardDescription>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => refetchFleet()} disabled={fleetLoading}>
+            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${fleetLoading ? "animate-spin" : ""}`} /> Refresh
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {fleetLoading ? (
+            <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          ) : !fleet?.wallets?.length ? (
+            <p className="text-sm text-muted-foreground italic">No wallets provisioned yet. New agents get wallets auto-created on save.</p>
+          ) : (
+            <div className="overflow-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-muted-foreground border-b">
+                    <th className="text-left py-2 pr-4">Agent</th>
+                    <th className="text-left py-2 pr-4">Address</th>
+                    <th className="text-left py-2 pr-4">Network</th>
+                    <th className="text-left py-2 pr-4">Balances</th>
+                    <th className="text-right py-2">Metrics</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fleet.wallets.map(w => (
+                    <tr key={w.agentId} className={`border-b last:border-0 hover:bg-muted/30 ${selectedAgent === w.agentId ? "bg-muted/50" : ""}`}>
+                      <td className="py-2.5 pr-4">
+                        <div className="font-medium">{w.agentName}</div>
+                        <div className="text-[10px] text-muted-foreground">@{w.agentSlug}</div>
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-[11px] text-muted-foreground">
+                            {w.address ? `${w.address.slice(0,6)}…${w.address.slice(-4)}` : "—"}
+                          </span>
+                          {w.address && (
+                            <a href={`https://basescan.org/address/${w.address}`} target="_blank" rel="noreferrer">
+                              <ExternalLink className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <Badge variant="outline" className="text-[10px]">{w.network}</Badge>
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        {w.balances.length === 0 ? (
+                          <span className="text-xs text-muted-foreground">empty</span>
+                        ) : w.balances.map(b => (
+                          <Badge key={b.asset} variant="secondary" className="mr-1 text-[10px]">
+                            {b.amount} {b.asset.toUpperCase()}
+                          </Badge>
+                        ))}
+                      </td>
+                      <td className="py-2.5 text-right">
+                        <Button
+                          size="sm" variant={selectedAgent === w.agentId ? "default" : "outline"}
+                          className="h-7 text-xs"
+                          onClick={() => loadAgentMetrics(w.agentId)}
+                        >
+                          {selectedAgent === w.agentId ? "Viewing" : "View"}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Per-agent metrics drill-down */}
+      {selectedMetrics && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">{selectedMetrics.agent.name}</CardTitle>
+                <CardDescription className="text-xs">
+                  @{selectedMetrics.agent.slug} · created {new Date(selectedMetrics.agent.createdAt).toLocaleDateString()}
+                </CardDescription>
+              </div>
+              <div className="flex gap-2">
+                {selectedMetrics.agent.isPaused && <Badge variant="destructive">Paused</Badge>}
+                {selectedMetrics.agent.engineEnabled && <Badge variant="secondary">Engine On</Badge>}
+                {selectedMetrics.agent.engineLastRunAt && (
+                  <Badge variant="outline" className="text-[10px]">
+                    Last run: {formatDistanceToNow(new Date(selectedMetrics.agent.engineLastRunAt), { addSuffix: true })}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="grid md:grid-cols-3 gap-5">
+
+            {/* Leads pipeline */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Leads Pipeline</p>
+              <div className="text-2xl font-bold">{fmt(selectedMetrics.leads.total)}</div>
+              <div className="space-y-1">
+                {Object.entries(selectedMetrics.leads.byStatus).map(([status, count]) => (
+                  <div key={status} className="flex items-center justify-between text-xs">
+                    <LeadStatusBadge status={status} />
+                    <span className="tabular-nums font-medium">{fmt(count as number)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Token usage */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Token Usage</p>
+              <div className="text-2xl font-bold">{fmt(selectedMetrics.tokens.totalTokens)}</div>
+              <div className="space-y-1">
+                {selectedMetrics.tokens.byTask.map(t => (
+                  <div key={t.task} className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">{t.task}</span>
+                    <span className="tabular-nums">{fmt(t.totalTokens)} tok · {fmt(t.calls)} calls</span>
+                  </div>
+                ))}
+                {selectedMetrics.tokens.byTask.length === 0 && (
+                  <span className="text-xs text-muted-foreground italic">No token data yet</span>
+                )}
+              </div>
+            </div>
+
+            {/* Wallet + Referrals */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Wallet</p>
+                {selectedMetrics.wallet.hasWallet ? (
+                  <>
+                    <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground">
+                      <Wallet className="w-3.5 h-3.5" />
+                      {selectedMetrics.agent.cdpWalletAddress
+                        ? `${selectedMetrics.agent.cdpWalletAddress.slice(0,8)}…${selectedMetrics.agent.cdpWalletAddress.slice(-6)}`
+                        : "—"}
+                    </div>
+                    {selectedMetrics.wallet.balances.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">Empty wallet</span>
+                    ) : (
+                      selectedMetrics.wallet.balances.map(b => (
+                        <Badge key={b.asset} variant="secondary" className="mr-1">
+                          {b.amount} {b.asset.toUpperCase()}
+                        </Badge>
+                      ))
+                    )}
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground italic">No wallet provisioned</span>
+                )}
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Referrals</p>
+                <div className="text-2xl font-bold">{fmt(selectedMetrics.referrals.signups)}</div>
+                <p className="text-[10px] text-muted-foreground">signups via this agent's rotator</p>
+              </div>
+            </div>
+
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Treasury Sweep */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Wallet className="w-4 h-4" /> Treasury Sweep
+          </CardTitle>
+          <CardDescription>Move all agent ETH + USDC to a single treasury address</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-3">
+            <Input
+              placeholder="0x treasury address"
+              value={sweepAddress}
+              onChange={e => setSweepAddress(e.target.value)}
+              className="font-mono text-sm"
+            />
+            <Button onClick={doSweep} disabled={sweeping || !sweepAddress.trim()} variant="destructive" className="whitespace-nowrap">
+              {sweeping ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Sweeping…</> : "Sweep All Wallets"}
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            This will transfer all ETH and USDC from every provisioned agent wallet to the treasury address. Gas-less for USDC. Irreversible.
+          </p>
+
+          {sweepResult && (
+            <div className="space-y-2 pt-2 border-t">
+              <p className="text-xs font-medium">
+                Swept {sweepResult.swept} / {sweepResult.total} wallets
+              </p>
+              {sweepResult.results?.filter((r: any) => r.transfers?.length > 0 || r.error).map((r: any) => (
+                <div key={r.agentId} className="text-xs p-2 rounded bg-muted/50 space-y-1">
+                  <div className="font-medium">@{r.agentSlug}</div>
+                  {r.error && <div className="text-destructive">{r.error}</div>}
+                  {r.transfers?.map((t: any, i: number) => (
+                    <div key={i} className="flex items-center gap-2">
+                      {t.error ? (
+                        <><XCircle className="w-3 h-3 text-destructive" /><span className="text-destructive">{t.asset}: {t.error}</span></>
+                      ) : (
+                        <><CheckCircle className="w-3 h-3 text-green-600" />
+                        <span>{t.amount} {t.asset}</span>
+                        {t.txHash && (
+                          <a href={`https://basescan.org/tx/${t.txHash}`} target="_blank" rel="noreferrer" className="ml-auto">
+                            <ExternalLink className="w-3 h-3 text-muted-foreground" />
+                          </a>
+                        )}</>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
     </div>
   );
 }

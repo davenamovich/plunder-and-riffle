@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable, personalRotatorLinksTable, offersTable, inheritedRefLinksTable, agentAssistantsTable, agentTokenUsageTable } from "@workspace/db/schema";
 import { eq, and, gt, count, sql } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
-import { createAgentWallet, isCDPConfigured } from "../lib/cdp.js";
+import { createAgentWallet, isCDPConfigured, getWalletBalances, sweepWallet } from "../lib/cdp.js";
 import { moltisStatusWithUsage, getDailyUsage } from "../lib/moltis.js";
 import { runRalphLoop, approveLead, rejectLead as ralphRejectLead, markLeadPosted } from "../lib/ralph.js";
 import { runSportsTipsEngine, pingTelegram } from "../lib/sports-tips.js";
@@ -440,15 +440,40 @@ router.get("/admin/agents-fleet", requireAdmin, async (req, res) => {
 
 router.post("/admin/agents", requireAdmin, async (req, res) => {
   try {
-    const { slug, name, description, offerUrl, freeSlotCapacity, paidSlotCapacity, slotDurationHours, dailyCap, paidSlotPrice } = req.body;
+    const { slug, name, description, offerUrl, freeSlotCapacity, paidSlotCapacity, slotDurationHours, dailyCap, paidSlotPrice, email } = req.body;
     if (!slug || !name || !offerUrl) { res.status(400).json({ error: "slug, name, offerUrl required" }); return; }
+
     const [agent] = await db.insert(agentsTable).values({
       slug: slug.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
       name, description: description || null, offerUrl,
       freeSlotCapacity: freeSlotCapacity || 25, paidSlotCapacity: paidSlotCapacity || 25,
       slotDurationHours: slotDurationHours || 24, dailyCap: dailyCap || 100, paidSlotPrice: paidSlotPrice || 9.99,
     }).returning();
-    res.json({ success: true, agent });
+
+    // Auto-provision CDP wallet if credentials are configured
+    let walletProvisioned = false;
+    if (isCDPConfigured()) {
+      try {
+        const agentLabel = email ? `${name} <${email}>` : name;
+        const wallet = await createAgentWallet("base-mainnet", agentLabel);
+        await db.update(agentsTable).set({
+          cdpWalletId: wallet.walletId,
+          cdpWalletAddress: wallet.address,
+          cdpWalletNetwork: wallet.network,
+          cdpWalletSeed: wallet.seed,
+          cdpWalletCreatedAt: new Date(),
+          updatedAt: new Date(),
+        }).where(eq(agentsTable.id, agent.id));
+        agent.cdpWalletAddress = wallet.address;
+        agent.cdpWalletId = wallet.walletId;
+        walletProvisioned = true;
+        console.log(`[cdp] auto-provisioned wallet for new agent ${agent.slug}: ${wallet.address}`);
+      } catch (walletErr: any) {
+        console.warn(`[cdp] auto-provision failed for ${agent.slug}:`, walletErr?.message);
+      }
+    }
+
+    res.json({ success: true, agent, walletProvisioned });
   } catch (err: any) {
     if (err.code === "23505") { res.status(400).json({ error: "Agent slug already exists" }); return; }
     console.error(err); res.status(500).json({ error: "Internal server error" });
@@ -756,6 +781,148 @@ router.delete("/admin/agents/:id/cdp-wallet", requireAdmin, async (req, res) => 
       cdpWalletSeed: null, cdpWalletCreatedAt: null, updatedAt: new Date(),
     }).where(eq(agentsTable.id, req.params.id));
     res.json({ success: true, message: "CDP wallet record cleared (on-chain wallet still exists)" });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Agent fleet wallet balances ──────────────────────────────────────────────
+
+router.get("/admin/agent-wallets", requireAdmin, async (_req, res) => {
+  try {
+    const agents = await db.select({
+      id: agentsTable.id, name: agentsTable.name, slug: agentsTable.slug,
+      cdpWalletId: agentsTable.cdpWalletId, cdpWalletAddress: agentsTable.cdpWalletAddress,
+      cdpWalletNetwork: agentsTable.cdpWalletNetwork, cdpWalletSeed: agentsTable.cdpWalletSeed,
+      cdpWalletCreatedAt: agentsTable.cdpWalletCreatedAt,
+    }).from(agentsTable).where(eq(agentsTable.isActive, true));
+
+    const walleted = agents.filter(a => a.cdpWalletId && a.cdpWalletSeed);
+
+    const walletData = await Promise.all(walleted.map(async (agent) => {
+      const balances = await getWalletBalances(agent.cdpWalletSeed!);
+      return {
+        agentId: agent.id,
+        agentName: agent.name,
+        agentSlug: agent.slug,
+        walletId: agent.cdpWalletId,
+        address: agent.cdpWalletAddress,
+        network: agent.cdpWalletNetwork ?? "base-mainnet",
+        balances,
+        createdAt: agent.cdpWalletCreatedAt,
+      };
+    }));
+
+    res.json({
+      wallets: walletData,
+      totalAgents: agents.length,
+      walletsProvisioned: walleted.length,
+      walletsWithBalance: walletData.filter(w => w.balances.length > 0).length,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
+});
+
+// ─── Sweep agent wallets to treasury ─────────────────────────────────────────
+
+router.post("/admin/agent-wallets/sweep", requireAdmin, async (req, res) => {
+  const { agentIds, toAddress, assets } = req.body as {
+    agentIds?: string[];
+    toAddress: string;
+    assets?: string[];
+  };
+
+  if (!toAddress) { res.status(400).json({ error: "toAddress required" }); return; }
+  if (!isCDPConfigured()) { res.status(503).json({ error: "CDP not configured" }); return; }
+
+  try {
+    let query = db.select({
+      id: agentsTable.id, name: agentsTable.name, slug: agentsTable.slug,
+      cdpWalletSeed: agentsTable.cdpWalletSeed, cdpWalletAddress: agentsTable.cdpWalletAddress,
+    }).from(agentsTable).where(eq(agentsTable.isActive, true));
+
+    const agents = await query;
+    const targets = (agentIds?.length
+      ? agents.filter(a => agentIds.includes(a.id))
+      : agents
+    ).filter(a => a.cdpWalletSeed);
+
+    console.log(`[cdp-sweep] initiated by admin — ${targets.length} wallets → ${toAddress}`);
+
+    const results = await Promise.all(targets.map(async (agent) => {
+      try {
+        const { transfers } = await sweepWallet(agent.cdpWalletSeed!, toAddress, assets ?? ["eth", "usdc"]);
+        return { agentId: agent.id, agentSlug: agent.slug, address: agent.cdpWalletAddress, transfers, ok: true };
+      } catch (err: any) {
+        return { agentId: agent.id, agentSlug: agent.slug, address: agent.cdpWalletAddress, transfers: [], ok: false, error: err?.message };
+      }
+    }));
+
+    const swept = results.filter(r => r.ok && r.transfers.length > 0).length;
+    res.json({ success: true, results, swept, total: targets.length });
+  } catch (err: any) {
+    console.error("[cdp-sweep] error:", err);
+    res.status(500).json({ error: err?.message ?? "Sweep failed" });
+  }
+});
+
+// ─── Per-agent comprehensive metrics ─────────────────────────────────────────
+
+router.get("/admin/agents/:id/metrics", requireAdmin, async (req, res) => {
+  try {
+    const agent = await db.select().from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+
+    // Leads pipeline breakdown
+    const leadCounts = await db
+      .select({ status: leadsTable.status, count: count() })
+      .from(leadsTable)
+      .where(eq(leadsTable.agentId, req.params.id))
+      .groupBy(leadsTable.status);
+
+    const leadsByStatus = Object.fromEntries(leadCounts.map(r => [r.status, r.count]));
+    const totalLeads = leadCounts.reduce((sum, r) => sum + r.count, 0);
+
+    // Token usage
+    const tokenStats = await db
+      .select({
+        task: agentTokenUsageTable.task,
+        calls: count(agentTokenUsageTable.id),
+        totalTokens: sql<number>`sum(${agentTokenUsageTable.totalTokens})::int`,
+        totalLeads:  sql<number>`sum(${agentTokenUsageTable.leadsInBatch})::int`,
+      })
+      .from(agentTokenUsageTable)
+      .where(eq(agentTokenUsageTable.agentId, req.params.id))
+      .groupBy(agentTokenUsageTable.task);
+
+    const totalTokens = tokenStats.reduce((sum, r) => sum + (r.totalTokens ?? 0), 0);
+
+    // Wallet balance (if available)
+    let walletBalances: any[] = [];
+    if (agent.cdpWalletSeed) {
+      walletBalances = await getWalletBalances(agent.cdpWalletSeed);
+    }
+
+    // Referral signups via this agent's rotator links
+    const signupCount = await db
+      .select({ count: count() })
+      .from(offerSignupsTable)
+      .where(eq(offerSignupsTable.agentId, req.params.id))
+      .then(r => r[0]?.count ?? 0);
+
+    res.json({
+      agent: {
+        id: agent.id, name: agent.name, slug: agent.slug,
+        isPaused: agent.isPaused, isActive: agent.isActive,
+        createdAt: agent.createdAt,
+        cdpWalletAddress: agent.cdpWalletAddress,
+        cdpWalletNetwork: agent.cdpWalletNetwork,
+        cdpWalletCreatedAt: agent.cdpWalletCreatedAt,
+        engineEnabled: agent.engineEnabled,
+        engineLastRunAt: agent.engineLastRunAt,
+      },
+      leads: { total: totalLeads, byStatus: leadsByStatus },
+      tokens: { byTask: tokenStats, totalTokens },
+      wallet: { balances: walletBalances, hasWallet: !!agent.cdpWalletId },
+      referrals: { signups: signupCount },
+    });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
