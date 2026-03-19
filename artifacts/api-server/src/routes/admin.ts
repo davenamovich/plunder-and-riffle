@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable, personalRotatorLinksTable, offersTable, inheritedRefLinksTable, agentAssistantsTable, agentTokenUsageTable, ralphBrainMemoryTable, agentEnginePostsTable } from "@workspace/db/schema";
+import { agentsTable, rotatorSlotsTable, usersTable, offerSignupsTable, leadsTable, personalRotatorLinksTable, offersTable, inheritedRefLinksTable, agentAssistantsTable, agentTokenUsageTable, ralphBrainMemoryTable, agentEnginePostsTable, experimentsTable } from "@workspace/db/schema";
+import { scoreExperiment, funnelRates } from "../lib/scorer.js";
 import { eq, and, gt, count, sql, desc, gte, isNull as isNullDrizzle } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
 import { createAgentWallet, isCDPConfigured, getWalletBalances, sweepWallet } from "../lib/cdp.js";
@@ -373,6 +374,70 @@ Analyze this data. Fill all memory fields. Generate at least 3 hypotheses and 3 
   } catch (err: any) {
     console.error("[ralph-brain] error:", err?.message);
     res.status(500).json({ error: "Brain run failed", detail: err?.message });
+  }
+});
+
+// ─── Experiments ──────────────────────────────────────────────────────────────
+
+router.get("/admin/experiments", requireAdmin, async (req, res) => {
+  try {
+    const rows = await db.select().from(experimentsTable).orderBy(desc(experimentsTable.createdAt));
+    const enriched = rows.map(r => {
+      const scored = scoreExperiment({
+        impressions: r.impressions, clicks: r.clicks, replies: r.replies,
+        dms: r.dms, leads: r.leads, qualifiedLeads: r.qualifiedLeads,
+      });
+      return { ...r, score: scored.score, decision: scored.decision, breakdown: scored.breakdown, rates: funnelRates(r) };
+    });
+    res.json({ ok: true, experiments: enriched });
+  } catch (err) {
+    console.error("[experiments] GET error:", err);
+    res.status(500).json({ error: "Failed to fetch experiments" });
+  }
+});
+
+router.post("/admin/experiments", requireAdmin, async (req, res) => {
+  try {
+    const { hook, type, platform, cta, agentSlug, impressions, clicks, replies, dms, leads, qualifiedLeads, notes } = req.body;
+    if (!hook?.trim()) { res.status(400).json({ error: "hook is required" }); return; }
+    const [row] = await db.insert(experimentsTable).values({
+      hook: hook.trim(), type: type ?? "pain", platform: platform ?? "X",
+      cta: cta ?? "DM AI", agentSlug: agentSlug ?? null,
+      impressions: impressions ?? 0, clicks: clicks ?? 0, replies: replies ?? 0,
+      dms: dms ?? 0, leads: leads ?? 0, qualifiedLeads: qualifiedLeads ?? 0,
+      notes: notes ?? null,
+    }).returning();
+    const scored = scoreExperiment(row);
+    res.json({ ok: true, experiment: { ...row, score: scored.score, decision: scored.decision } });
+  } catch (err) {
+    console.error("[experiments] POST error:", err);
+    res.status(500).json({ error: "Failed to create experiment" });
+  }
+});
+
+router.put("/admin/experiments/:id", requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const allowed = ["hook","type","platform","cta","agentSlug","impressions","clicks","replies","dms","leads","qualifiedLeads","status","notes"] as const;
+    const updates: Record<string, any> = { updatedAt: new Date() };
+    for (const key of allowed) if (req.body[key] !== undefined) updates[key] = req.body[key];
+    const [row] = await db.update(experimentsTable).set(updates).where(eq(experimentsTable.id, id)).returning();
+    if (!row) { res.status(404).json({ error: "Experiment not found" }); return; }
+    const scored = scoreExperiment(row);
+    res.json({ ok: true, experiment: { ...row, score: scored.score, decision: scored.decision, breakdown: scored.breakdown, rates: funnelRates(row) } });
+  } catch (err) {
+    console.error("[experiments] PUT error:", err);
+    res.status(500).json({ error: "Failed to update experiment" });
+  }
+});
+
+router.delete("/admin/experiments/:id", requireAdmin, async (req, res) => {
+  try {
+    await db.delete(experimentsTable).where(eq(experimentsTable.id, req.params.id));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[experiments] DELETE error:", err);
+    res.status(500).json({ error: "Failed to delete experiment" });
   }
 });
 

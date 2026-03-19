@@ -440,6 +440,9 @@ export default function Admin() {
           <TabsTrigger value="splits" className="flex items-center gap-1.5">
             <Coins className="w-3.5 h-3.5" /> Splits
           </TabsTrigger>
+          <TabsTrigger value="experiments" className="flex items-center gap-1.5">
+            <BarChart2 className="w-3.5 h-3.5" /> Experiments
+          </TabsTrigger>
         </TabsList>
 
         {/* ── RALPH TAB ── */}
@@ -1219,6 +1222,10 @@ export default function Admin() {
 
         <TabsContent value="splits">
           <CommissionSplitsTab token={token} />
+        </TabsContent>
+
+        <TabsContent value="experiments">
+          <ExperimentsTab token={token} />
         </TabsContent>
 
       </Tabs>
@@ -4012,6 +4019,295 @@ function CommissionSplitsTab({ token }: { token: string | null }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Experiments Tab ──────────────────────────────────────────────────────────
+
+const EXP_TYPES = ["pain","authority","curiosity","social_proof","offer"] as const;
+const PLATFORMS = ["X","LinkedIn","Reddit","Threads","TikTok","Email","Discord"] as const;
+const DECISION_META: Record<string, { label: string; cls: string; bar: string }> = {
+  SCALE:   { label: "SCALE",   cls: "text-green-400 border-green-500/30 bg-green-500/10",  bar: "bg-green-500"  },
+  ITERATE: { label: "ITERATE", cls: "text-amber-400 border-amber-500/30 bg-amber-500/10",  bar: "bg-amber-500"  },
+  TEST:    { label: "TEST",    cls: "text-blue-400  border-blue-500/30  bg-blue-500/10",   bar: "bg-blue-500"   },
+  KILL:    { label: "KILL",    cls: "text-red-400   border-red-500/30   bg-red-500/10",    bar: "bg-red-500"    },
+};
+
+const BLANK_FORM = { hook: "", type: "pain", platform: "X", cta: "DM AI", agentSlug: "", impressions: 0, clicks: 0, replies: 0, dms: 0, leads: 0, qualifiedLeads: 0, notes: "" };
+
+function FunnelBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+  const pct = total > 0 ? Math.min(100, (value / total) * 100) : 0;
+  return (
+    <div className="space-y-0.5">
+      <div className="flex justify-between text-[10px] text-muted-foreground">
+        <span>{label}</span><span className="font-mono">{value.toLocaleString()}</span>
+      </div>
+      <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function ExperimentsTab({ token }: { token: string | null }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const headers = React.useMemo(() => token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" }, [token]);
+
+  const { data, isLoading } = useQuery<{ ok: boolean; experiments: any[] }>({
+    queryKey: ["experiments"],
+    queryFn: () => fetch("/api/admin/experiments", { headers }).then(r => r.json()),
+    staleTime: 30_000,
+    enabled: !!token,
+  });
+
+  const [showForm, setShowForm] = React.useState(false);
+  const [editTarget, setEditTarget] = React.useState<any | null>(null);
+  const [form, setForm] = React.useState({ ...BLANK_FORM });
+  const [saving, setSaving] = React.useState(false);
+  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  const [filterDecision, setFilterDecision] = React.useState<string>("all");
+
+  const experiments: any[] = data?.experiments ?? [];
+  const sorted = [...experiments].sort((a, b) => b.score - a.score);
+  const filtered = filterDecision === "all" ? sorted : sorted.filter(e => e.decision === filterDecision);
+
+  function openNew() {
+    setForm({ ...BLANK_FORM });
+    setEditTarget(null);
+    setShowForm(true);
+  }
+
+  function openEdit(exp: any) {
+    setForm({
+      hook: exp.hook, type: exp.type, platform: exp.platform, cta: exp.cta,
+      agentSlug: exp.agentSlug ?? "", impressions: exp.impressions, clicks: exp.clicks,
+      replies: exp.replies, dms: exp.dms, leads: exp.leads, qualifiedLeads: exp.qualifiedLeads,
+      notes: exp.notes ?? "",
+    });
+    setEditTarget(exp);
+    setShowForm(true);
+  }
+
+  function setField(k: string, v: any) {
+    setForm(f => ({ ...f, [k]: v }));
+  }
+
+  async function save() {
+    if (!form.hook.trim()) { toast({ title: "Hook is required", variant: "destructive" }); return; }
+    setSaving(true);
+    try {
+      const url = editTarget ? `/api/admin/experiments/${editTarget.id}` : "/api/admin/experiments";
+      const method = editTarget ? "PUT" : "POST";
+      const body = { ...form, impressions: +form.impressions, clicks: +form.clicks, replies: +form.replies, dms: +form.dms, leads: +form.leads, qualifiedLeads: +form.qualifiedLeads };
+      const r = await fetch(url, { method, headers, body: JSON.stringify(body) });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error ?? "Save failed");
+      await qc.invalidateQueries({ queryKey: ["experiments"] });
+      setShowForm(false);
+      toast({ title: editTarget ? "Experiment updated" : "Experiment created", description: `Score: ${d.experiment?.score} — ${d.experiment?.decision}` });
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
+    } finally { setSaving(false); }
+  }
+
+  async function deleteExp(id: string) {
+    if (!confirm("Delete this experiment?")) return;
+    try {
+      await fetch(`/api/admin/experiments/${id}`, { method: "DELETE", headers });
+      await qc.invalidateQueries({ queryKey: ["experiments"] });
+      toast({ title: "Experiment deleted" });
+    } catch { toast({ title: "Delete failed", variant: "destructive" }); }
+  }
+
+  const counts = { SCALE: 0, ITERATE: 0, TEST: 0, KILL: 0 };
+  for (const e of experiments) if (e.decision in counts) (counts as any)[e.decision]++;
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold flex items-center gap-2"><BarChart2 className="w-5 h-5 text-primary" /> Hook Experiments</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">Track funnel metrics per hook. Ralph scores each one automatically.</p>
+        </div>
+        <Button size="sm" onClick={openNew} className="gap-1.5 shrink-0"><Plus className="w-3.5 h-3.5" /> New Experiment</Button>
+      </div>
+
+      {/* Decision summary */}
+      <div className="grid grid-cols-4 gap-3">
+        {(["SCALE","ITERATE","TEST","KILL"] as const).map(d => (
+          <button key={d} onClick={() => setFilterDecision(f => f === d ? "all" : d)}
+            className={`rounded-lg border px-3 py-2 text-left transition-all ${filterDecision === d ? DECISION_META[d].cls + " ring-1 ring-current" : "border-border/30 bg-muted/20 hover:bg-muted/40"}`}>
+            <p className={`text-xs font-bold ${filterDecision === d ? "" : "text-muted-foreground"}`}>{d}</p>
+            <p className={`text-xl font-mono font-bold mt-0.5 ${filterDecision === d ? "" : "text-foreground"}`}>{(counts as any)[d]}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* Experiment form */}
+      {showForm && (
+        <Card className="border-primary/20 bg-primary/3">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">{editTarget ? "Edit Experiment" : "New Experiment"}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Hook *</label>
+              <textarea rows={2} className="w-full rounded-md border border-border/60 bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary" value={form.hook} onChange={e => setField("hook", e.target.value)} placeholder="AI is already replacing jobs quietly." />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Type</label>
+                <select className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm focus:outline-none" value={form.type} onChange={e => setField("type", e.target.value)}>
+                  {EXP_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Platform</label>
+                <select className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm focus:outline-none" value={form.platform} onChange={e => setField("platform", e.target.value)}>
+                  {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">CTA</label>
+                <input className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm focus:outline-none" value={form.cta} onChange={e => setField("cta", e.target.value)} />
+              </div>
+            </div>
+            {/* Funnel metrics grid */}
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2">Funnel Metrics</p>
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                {(["impressions","clicks","replies","dms","leads","qualifiedLeads"] as const).map(k => (
+                  <div key={k} className="space-y-1">
+                    <label className="text-[10px] font-medium text-muted-foreground capitalize">{k === "qualifiedLeads" ? "Qualified" : k}</label>
+                    <input type="number" min={0} className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm font-mono focus:outline-none" value={(form as any)[k]} onChange={e => setField(k, e.target.value)} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Notes</label>
+              <input className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm focus:outline-none" value={form.notes} onChange={e => setField("notes", e.target.value)} placeholder="Optional context..." />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button size="sm" onClick={save} disabled={saving}>
+                {saving ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Saving…</> : "Save"}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Experiment list */}
+      {isLoading && <div className="flex items-center gap-2 text-sm text-muted-foreground py-8"><Loader2 className="w-4 h-4 animate-spin" />Loading experiments…</div>}
+
+      {!isLoading && filtered.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground">
+          <BarChart2 className="w-10 h-10 mx-auto mb-3 opacity-20" />
+          <p className="font-medium">No experiments yet</p>
+          <p className="text-xs mt-1">Track your hooks here. Ralph will score and classify each one.</p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {filtered.map(exp => {
+          const meta = DECISION_META[exp.decision] ?? DECISION_META.KILL;
+          const isExpanded = expandedId === exp.id;
+          const maxFunnel = exp.impressions || 1;
+          return (
+            <Card key={exp.id} className={`border transition-all ${isExpanded ? "border-primary/30" : "border-border/30"}`}>
+              <div className="px-4 py-3 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : exp.id)}>
+                <div className="flex items-start gap-3">
+                  {/* Score circle */}
+                  <div className={`shrink-0 w-12 h-12 rounded-full border-2 flex flex-col items-center justify-center ${meta.cls}`}>
+                    <span className="text-xs font-bold leading-none">{exp.score}</span>
+                    <span className="text-[9px] leading-none mt-0.5 opacity-80">/ 120</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm leading-snug">{exp.hook}</p>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${meta.cls}`}>{meta.label}</span>
+                      <span className="text-[10px] text-muted-foreground bg-muted/30 border border-border/30 rounded px-1.5 py-0.5">{exp.platform}</span>
+                      <span className="text-[10px] text-muted-foreground bg-muted/30 border border-border/30 rounded px-1.5 py-0.5">{exp.type}</span>
+                      <span className="text-[10px] text-muted-foreground">CTA: {exp.cta}</span>
+                    </div>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1">
+                    <button onClick={e => { e.stopPropagation(); openEdit(exp); }} className="p-1.5 rounded hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors"><Edit3 className="w-3.5 h-3.5" /></button>
+                    <button onClick={e => { e.stopPropagation(); deleteExp(exp.id); }} className="p-1.5 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                  </div>
+                </div>
+              </div>
+
+              {isExpanded && (
+                <div className="px-4 pb-4 border-t border-border/20 pt-3 space-y-4">
+                  {/* Funnel bars */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Funnel</p>
+                    <FunnelBar label="Impressions" value={exp.impressions} total={maxFunnel} color={meta.bar} />
+                    <FunnelBar label="Clicks" value={exp.clicks} total={exp.impressions || 1} color={meta.bar} />
+                    <FunnelBar label="Replies" value={exp.replies} total={exp.clicks || 1} color={meta.bar} />
+                    <FunnelBar label="DMs" value={exp.dms} total={exp.replies || 1} color={meta.bar} />
+                    <FunnelBar label="Leads" value={exp.leads} total={exp.dms || 1} color={meta.bar} />
+                    <FunnelBar label="Qualified" value={exp.qualifiedLeads} total={exp.leads || 1} color={meta.bar} />
+                  </div>
+
+                  {/* Conversion rates */}
+                  {exp.rates && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Conversion Rates</p>
+                      <div className="grid grid-cols-5 gap-2">
+                        {[
+                          { label: "CTR", value: exp.rates.ctr },
+                          { label: "Reply %", value: exp.rates.replyRate },
+                          { label: "DM %", value: exp.rates.dmRate },
+                          { label: "Lead %", value: exp.rates.leadRate },
+                          { label: "Quality", value: exp.rates.quality },
+                        ].map(r => (
+                          <div key={r.label} className="bg-muted/20 rounded-md p-2 text-center border border-border/20">
+                            <p className="text-[10px] text-muted-foreground">{r.label}</p>
+                            <p className="text-sm font-mono font-bold">{r.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Score breakdown */}
+                  {exp.breakdown && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Score Breakdown (max 120)</p>
+                      <div className="grid grid-cols-5 gap-2">
+                        {[
+                          { label: "Attention", value: exp.breakdown.attention, max: 20 },
+                          { label: "Engagement", value: exp.breakdown.engagement, max: 25 },
+                          { label: "Intent", value: exp.breakdown.intent, max: 25 },
+                          { label: "Conversion", value: exp.breakdown.conversion, max: 20 },
+                          { label: "Quality", value: exp.breakdown.quality, max: 30 },
+                        ].map(b => (
+                          <div key={b.label} className="bg-muted/20 rounded-md p-2 text-center border border-border/20">
+                            <p className="text-[10px] text-muted-foreground">{b.label}</p>
+                            <p className="text-sm font-mono font-bold">{b.value}</p>
+                            <p className="text-[9px] text-muted-foreground">/ {b.max}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {exp.notes && (
+                    <p className="text-xs text-muted-foreground italic border-l-2 border-border/40 pl-3">{exp.notes}</p>
+                  )}
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }
