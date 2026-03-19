@@ -98,10 +98,10 @@ function ReferralRotatorCard({ userSlug, referralCode, token }: { userSlug: stri
           <CardTitle className="flex items-center gap-2 text-base"><RotateCcw className="h-4 w-4 text-primary" /> Personal Rotator</CardTitle>
           <div className="flex items-center gap-2">
             {!isLoading && <Badge variant="outline" className="text-xs">{activeCount} of {referrals.length} active</Badge>}
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => { navigator.clipboard.writeText(`${APP_URL}/r/${userSlug}`); toast({ title: "Copied!" }); }}>
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => { navigator.clipboard.writeText(`${APP_URL}/r/${referralCode}`); toast({ title: "Copied!" }); }}>
               <Copy className="h-3 w-3" /> Copy Link
             </Button>
-            <a href={`/r/${userSlug}`} target="_blank" rel="noopener noreferrer">
+            <a href={`/r/${referralCode}`} target="_blank" rel="noopener noreferrer">
               <Button size="sm" variant="ghost" className="h-7 px-2"><ExternalLink className="h-3.5 w-3.5" /></Button>
             </a>
           </div>
@@ -278,14 +278,14 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold font-display tracking-tight mb-1">Dashboard</h1>
           <p className="text-muted-foreground">Welcome back, <span className="text-foreground font-medium">{user?.displayName || user?.email}</span></p>
         </div>
-        {userSlug && (
+        {referralCode && (
           <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 flex items-center gap-3 max-w-sm">
             <LinkIcon className="w-4 h-4 text-primary shrink-0" />
             <div className="min-w-0 flex-1">
               <span className="text-muted-foreground block text-xs mb-0.5">Your Referral Link</span>
-              <span className="font-mono text-xs text-primary truncate block">{APP_URL}/r/{userSlug}</span>
+              <span className="font-mono text-xs text-primary truncate block">{APP_URL}/r/{referralCode}</span>
             </div>
-            <Button size="icon" variant="ghost" className="shrink-0 h-8 w-8" onClick={() => handleCopy(`${APP_URL}/r/${userSlug}`)}>
+            <Button size="icon" variant="ghost" className="shrink-0 h-8 w-8" onClick={() => handleCopy(`${APP_URL}/r/${referralCode}`)}>
               <Copy className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -500,15 +500,15 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/20 border border-border/40 font-mono text-sm">
-                      <span className="flex-1 truncate text-muted-foreground">{APP_URL}/r/{userSlug}</span>
-                      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => handleCopy(`${APP_URL}/r/${userSlug}`)}><Copy className="h-3.5 w-3.5" /></Button>
-                      <a href={`/r/${userSlug}`} target="_blank" rel="noopener noreferrer"><Button size="sm" variant="ghost" className="h-7 px-2"><ExternalLink className="h-3.5 w-3.5" /></Button></a>
+                      <span className="flex-1 truncate text-muted-foreground">{APP_URL}/r/{referralCode}</span>
+                      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => handleCopy(`${APP_URL}/r/${referralCode}`)}><Copy className="h-3.5 w-3.5" /></Button>
+                      <a href={`/r/${referralCode}`} target="_blank" rel="noopener noreferrer"><Button size="sm" variant="ghost" className="h-7 px-2"><ExternalLink className="h-3.5 w-3.5" /></Button></a>
                     </div>
                   </CardContent>
                 </Card>
 
                 {/* Personal rotator */}
-                <ReferralRotatorCard userSlug={userSlug} token={token} />
+                <ReferralRotatorCard userSlug={userSlug} referralCode={referralCode} token={token} />
 
                 {/* Social connections */}
                 <Card className="glass-panel border-border/50">
