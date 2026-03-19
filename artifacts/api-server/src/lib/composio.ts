@@ -137,9 +137,17 @@ export async function sendGmail(
   });
 }
 
+export async function postToFacebook(entityId: string, message: string): Promise<ComposioActionResult> {
+  return executeAction(entityId, "FACEBOOK_POST_STATUS", { message });
+}
+
+export async function postToInstagram(entityId: string, caption: string): Promise<ComposioActionResult> {
+  return executeAction(entityId, "INSTAGRAM_CREATE_PHOTO_POST", { caption });
+}
+
 // ─── Platform routing ─────────────────────────────────────────────────────────
 
-export type SocialPlatform = "twitter" | "linkedin" | "telegram" | "gmail";
+export type SocialPlatform = "twitter" | "linkedin" | "telegram" | "gmail" | "facebook" | "instagram";
 
 export async function postToSocial(
   entityId: string,
@@ -152,6 +160,8 @@ export async function postToSocial(
     case "linkedin":   return postToLinkedIn(entityId, content);
     case "telegram":   return postToTelegram(entityId, content, extra?.chatId);
     case "gmail":      return sendGmail(entityId, extra?.to ?? "", extra?.subject ?? "Update", content);
+    case "facebook":   return postToFacebook(entityId, content);
+    case "instagram":  return postToInstagram(entityId, content);
     default:           return { ok: false, error: `Unknown platform: ${platform}` };
   }
 }
@@ -161,6 +171,8 @@ export async function postToSocial(
 export const COMPOSIO_APPS = [
   { name: "Twitter / X",  id: "twitter",    icon: "𝕏",  action: "TWITTER_CREATION_OF_A_POST" },
   { name: "LinkedIn",     id: "linkedin",   icon: "in", action: "LINKEDIN_CREATE_LINKED_IN_POST" },
+  { name: "Facebook",     id: "facebook",   icon: "f",  action: "FACEBOOK_POST_STATUS" },
+  { name: "Instagram",    id: "instagram",  icon: "📷",  action: "INSTAGRAM_CREATE_PHOTO_POST" },
   { name: "Telegram",     id: "telegram",   icon: "✈️",  action: "TELEGRAM_SEND_MESSAGE" },
   { name: "Gmail",        id: "gmail",      icon: "📧",  action: "GMAIL_SEND_EMAIL" },
   { name: "Slack",        id: "slack",      icon: "#",  action: "SLACK_SENDS_A_MESSAGE_TO_A_SLACK_CHANNEL" },

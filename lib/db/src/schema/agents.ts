@@ -117,10 +117,12 @@ export const agentAssistantsTable = pgTable("agent_assistants", {
   userId: text("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   addedAt: timestamp("added_at").notNull().defaultNow(),
   // Per-platform posting permission toggles (default on — opt-out model)
-  twitterEnabled:  boolean("twitter_enabled").notNull().default(true),
-  linkedinEnabled: boolean("linkedin_enabled").notNull().default(true),
-  tiktokEnabled:   boolean("tiktok_enabled").notNull().default(true),
-  redditEnabled:   boolean("reddit_enabled").notNull().default(true),
+  twitterEnabled:   boolean("twitter_enabled").notNull().default(true),
+  linkedinEnabled:  boolean("linkedin_enabled").notNull().default(true),
+  tiktokEnabled:    boolean("tiktok_enabled").notNull().default(true),
+  redditEnabled:    boolean("reddit_enabled").notNull().default(true),
+  facebookEnabled:  boolean("facebook_enabled").notNull().default(true),
+  instagramEnabled: boolean("instagram_enabled").notNull().default(true),
 });
 
 export type AgentAssistant = typeof agentAssistantsTable.$inferSelect;

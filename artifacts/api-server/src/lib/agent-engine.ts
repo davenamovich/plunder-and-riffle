@@ -25,7 +25,7 @@ import {
 import { eq, and, gt, sql } from "drizzle-orm";
 import { hasBudget } from "./moltis.js";
 
-const PLATFORMS = ["twitter", "linkedin", "tiktok", "reddit"] as const;
+const PLATFORMS = ["twitter", "linkedin", "tiktok", "reddit", "facebook", "instagram"] as const;
 type Platform = (typeof PLATFORMS)[number];
 
 // ─── Content generation ───────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ async function generatePostContent(
   const { chat } = await import("./moltis.js") as any;
   if (!chat) return buildFallbackPost(platform, agentName, refLink, offerUrl);
 
-  const charLimits: Record<Platform, number> = { twitter: 240, linkedin: 600, tiktok: 300, reddit: 800 };
+  const charLimits: Record<Platform, number> = { twitter: 240, linkedin: 600, tiktok: 300, reddit: 800, facebook: 800, instagram: 2200 };
   const limit = charLimits[platform];
 
   const systemPrompt = `You are ${agentPersona}. You write deadpan, first-person social posts about using AI to grow a business. The tone is dry, earnest, and slightly baffled by your own results. No exclamation marks. No hype. No hashtags. No buzzwords. 60-90 words. The humor comes from treating something genuinely extraordinary as if it's Tuesday. You include one referral link, naturally, as an afterthought.`;
@@ -98,6 +98,14 @@ function buildFallbackPost(platform: Platform, agentName: string, refLink: strin
     reddit: [
       `Not sure how to frame this, but I've had an AI agent running my lead gen for 6 weeks and it's just... fine? Like, it works. I get leads. The AI does things I wouldn't do. Some of them work. I've stopped questioning it. 24-hour free trial if you want to find out what yours does: ${refLink}`,
       `Someone at my company asked who'd been doing outreach at 3am. Nobody said anything. We all looked at the dashboard. The AI had sent 31 messages. We are investigating whether this is a problem. Current assessment: probably not. ${refLink}`,
+    ],
+    facebook: [
+      `I want to share something with you all. I set up an AI agent to handle lead generation. It has been running for three weeks. It has not asked for a day off. It has not complained about the commute. It generated four qualified leads this morning before I had coffee. I am choosing to view this positively. If you'd like to try it: ${refLink}`,
+      `Update from my life: I now have an AI doing outreach for me while I sleep. The leads it finds are better than the ones I used to find. I am not sure how to feel about that. Free 24-hour trial here: ${refLink}`,
+    ],
+    instagram: [
+      `Something happened this week that I'm still processing. My AI agent has been running outreach 24/7 and it just... works. Quietly. Without needing anything from me. Three leads this morning. I was asleep for two of them. Link in bio if you want your own: ${refLink}`,
+      `I set up an AI lead-gen agent six weeks ago. I forgot about it for a few days. It did not forget about its job. I have complicated feelings about this. Free trial in bio: ${refLink}`,
     ],
   };
 
@@ -146,6 +154,14 @@ async function generateViralHook(
       `Not sure how to explain this but an AI agent has been running our lead gen for months and it just... works? We have 8 billion reviews. The company is definitely fine. Here if you want to try it: ${refLink}`,
       `Someone at our all-hands asked what makes Plunder and Riffle different. There was a long pause. Then someone said "the AI runs all night." That was the whole answer. ${refLink}`,
     ],
+    facebook: [
+      `I've been at Plunder and Riffle for three years now. The AI has been running longer than some of our employees. It generates leads while we sleep. We are choosing to call this a feature. If you're curious: ${refLink}`,
+      `Wanted to share something with my network. Plunder and Riffle is still going. The AI is still running. We have 8 billion reviews. Everything is completely normal. Free trial: ${refLink}`,
+    ],
+    instagram: [
+      `Three years at Plunder and Riffle. The AI runs 24/7. The leads keep coming. I stopped asking questions. Link in bio: ${refLink}`,
+      `Our AI agent closed a lead while I was at lunch. I checked the logs when I got back. I am choosing to see this as a positive development. Link in bio: ${refLink}`,
+    ],
   };
 
   if (!(await hasBudget(1))) {
@@ -157,7 +173,7 @@ async function generateViralHook(
     const { chatRaw } = await import("./moltis.js") as any;
     if (!chatRaw) throw new Error("no chatRaw");
 
-    const charLimits: Record<Platform, number> = { twitter: 240, linkedin: 600, tiktok: 300, reddit: 800 };
+    const charLimits: Record<Platform, number> = { twitter: 240, linkedin: 600, tiktok: 300, reddit: 800, facebook: 800, instagram: 2200 };
     const limit = charLimits[platform];
     const name = userDisplayName || "I";
 
@@ -265,16 +281,20 @@ async function postViaComposio(
   try {
     // Real Composio integration via their MCP/tool execution API
     const toolNames: Record<Platform, string> = {
-      twitter:  "TWITTER_CREATION_REPLY_TO_TWEET",
-      linkedin: "LINKEDIN_CREATE_LINKED_IN_POST",
-      tiktok:   "TIKTOK_CREATE_VIDEO_POST",
-      reddit:   "REDDIT_CREATE_POST",
+      twitter:   "TWITTER_CREATION_REPLY_TO_TWEET",
+      linkedin:  "LINKEDIN_CREATE_LINKED_IN_POST",
+      tiktok:    "TIKTOK_CREATE_VIDEO_POST",
+      reddit:    "REDDIT_CREATE_POST",
+      facebook:  "FACEBOOK_POST_STATUS",
+      instagram: "INSTAGRAM_CREATE_PHOTO_POST",
     };
     const toolInputs: Record<Platform, Record<string, unknown>> = {
-      twitter:  { text: content },
-      linkedin: { text: content, visibility: "PUBLIC" },
-      tiktok:   { caption: content },
-      reddit:   { title: "Check this out", body: content },
+      twitter:   { text: content },
+      linkedin:  { text: content, visibility: "PUBLIC" },
+      tiktok:    { caption: content },
+      reddit:    { title: "Check this out", body: content },
+      facebook:  { message: content },
+      instagram: { caption: content },
     };
     const resp = await fetch("https://backend.composio.dev/api/v1/actions/execute", {
       method: "POST",
