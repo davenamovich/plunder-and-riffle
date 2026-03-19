@@ -516,7 +516,7 @@ export default function MyAgentPage() {
 
             {/* Referral Rotator */}
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
-              <ReferralRotatorCard userSlug={data.user.slug} />
+              <ReferralRotatorCard userSlug={data.user.referralCode} />
             </motion.div>
 
             {/* Active slots */}

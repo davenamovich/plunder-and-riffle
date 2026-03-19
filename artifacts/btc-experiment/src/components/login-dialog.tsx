@@ -55,11 +55,13 @@ export function LoginDialog({ open, onClose, onSuccess }: LoginDialogProps) {
     setLoading(true);
     setError(null);
     try {
+      const storedRef = sessionStorage.getItem("btc_ref") || undefined;
       const r = await fetch("/api/auth/verify-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), code: code.trim() }),
+        body: JSON.stringify({ email: email.trim(), code: code.trim(), referralCode: storedRef }),
       });
+      if (storedRef) sessionStorage.removeItem("btc_ref");
       const data = await r.json();
       if (!r.ok) { setError(data.error ?? "Invalid code"); return; }
       onSuccess(data.token, data.user);

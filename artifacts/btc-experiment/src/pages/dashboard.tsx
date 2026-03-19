@@ -147,7 +147,7 @@ export default function Dashboard() {
       </motion.div>
 
       {/* Personal Rotator Link */}
-      {user?.slug && (
+      {user?.referralCode && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -157,14 +157,14 @@ export default function Dashboard() {
           <div className="flex-1 min-w-0">
             <p className="text-xs text-muted-foreground mb-1">Your Personal Rotator Page</p>
             <p className="font-mono text-sm text-foreground truncate">
-              {APP_URL}/r/{user.slug}
+              {APP_URL}/r/{user.referralCode}
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button variant="outline" size="sm" onClick={() => handleCopy(`${APP_URL}/r/${user.slug}`)}>
+            <Button variant="outline" size="sm" onClick={() => handleCopy(`${APP_URL}/r/${user.referralCode}`)}>
               <Copy className="w-3.5 h-3.5 mr-1.5" /> Copy
             </Button>
-            <Link href={`/r/${user.slug}`}>
+            <Link href={`/r/${user.referralCode}`}>
               <Button variant="outline" size="sm">
                 <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Preview
               </Button>
