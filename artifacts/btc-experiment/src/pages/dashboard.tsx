@@ -267,7 +267,7 @@ export default function Dashboard() {
   }
 
   const activeSlotCount = slotsRes?.slots.filter(s => s.status === "active").length || 0;
-  const userSlug = agentData?.user.slug ?? user?.referralCode ?? "";
+  const userSlug = agentData?.user.slug ?? "";
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -314,11 +314,14 @@ export default function Dashboard() {
       {/* Tabs */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
         <Tabs defaultValue="slots">
-          <TabsList className="grid w-full grid-cols-3 h-11 mb-6">
+          <TabsList className="grid w-full grid-cols-4 h-11 mb-6">
             <TabsTrigger value="slots">Rotator Slots</TabsTrigger>
             <TabsTrigger value="offers">Offers</TabsTrigger>
             <TabsTrigger value="agent" className="flex items-center gap-1.5">
               <Bot className="w-3.5 h-3.5" /> My Agent
+            </TabsTrigger>
+            <TabsTrigger value="wallet" className="flex items-center gap-1.5">
+              <Wallet className="w-3.5 h-3.5" /> Wallet
             </TabsTrigger>
           </TabsList>
 
@@ -556,128 +559,6 @@ export default function Dashboard() {
                   </CardContent>
                 </Card>
 
-                {/* Wallet earnings + address */}
-                <div className="grid grid-cols-3 gap-4">
-                  {walletLoading ? [...Array(3)].map((_,i) => <Skeleton key={i} className="h-24 rounded-xl" />) : (
-                    <>
-                      <Card className="border-primary/20 bg-primary/5">
-                        <CardContent className="p-5">
-                          <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Available</p>
-                          <p className="text-3xl font-bold font-display text-primary">${(walletData?.earnings.withdrawable ?? 0).toFixed(2)}</p>
-                          <p className="text-xs text-muted-foreground mt-1">USDC on Base</p>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardContent className="p-5">
-                          <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Paid Out</p>
-                          <p className="text-3xl font-bold font-display">${(walletData?.earnings.paid ?? 0).toFixed(2)}</p>
-                          <p className="text-xs text-muted-foreground mt-1">All time</p>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardContent className="p-5">
-                          <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Events</p>
-                          <p className="text-3xl font-bold font-display">{walletData?.splits.length ?? 0}</p>
-                          <p className="text-xs text-muted-foreground mt-1">Commission splits</p>
-                        </CardContent>
-                      </Card>
-                    </>
-                  )}
-                </div>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base"><Wallet className="w-4 h-4 text-primary" /> Withdrawal Address</CardTitle>
-                    <CardDescription>Your Base wallet address for USDC payouts.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex gap-2">
-                      <Input placeholder="0x..." value={walletAddressInput} onChange={e => setWalletAddressInput(e.target.value)} className="font-mono text-sm" />
-                      <Button variant="outline" disabled={savingAddress || !walletAddressInput} onClick={async () => {
-                        setSavingAddress(true);
-                        try {
-                          const r = await fetch("/api/dashboard/wallet/address", { method: "POST", headers: authHeaders, body: JSON.stringify({ address: walletAddressInput }) });
-                          const d = await r.json();
-                          if (!d.ok) throw new Error(d.error ?? "Failed");
-                          await refetchWallet();
-                          toast({ title: "Wallet address saved" });
-                        } catch (e: any) { toast({ title: "Save failed", description: e.message, variant: "destructive" }); }
-                        finally { setSavingAddress(false); }
-                      }} className="shrink-0">
-                        {savingAddress ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
-                        <span className="ml-1.5">Save</span>
-                      </Button>
-                    </div>
-                    {walletData?.walletAddress && (
-                      <div className="flex items-center gap-2 text-xs text-green-400">
-                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                        Saved: <span className="font-mono">{walletData.walletAddress.slice(0,10)}…{walletData.walletAddress.slice(-6)}</span>
-                      </div>
-                    )}
-                    {!walletData?.walletAddress && !walletLoading && (
-                      <div className="flex items-center gap-2 text-xs text-amber-400">
-                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                        No withdrawal address set. Add one above to receive payouts.
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card className="border-primary/20">
-                  <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                      <p className="font-semibold text-sm">Request Withdrawal</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Queue your pending commissions for USDC payout.
-                        {(walletData?.earnings.withdrawable ?? 0) === 0 && " No pending balance right now."}
-                      </p>
-                    </div>
-                    <Button disabled={withdrawing || !walletData?.walletAddress || (walletData?.earnings.withdrawable ?? 0) === 0} onClick={async () => {
-                      setWithdrawing(true);
-                      try {
-                        const r = await fetch("/api/dashboard/wallet/withdraw", { method: "POST", headers: authHeaders });
-                        const d = await r.json();
-                        if (!d.ok && !d.message) throw new Error(d.error ?? "Failed");
-                        await refetchWallet();
-                        toast({ title: "Withdrawal queued", description: d.message });
-                      } catch (e: any) { toast({ title: "Withdrawal failed", description: e.message, variant: "destructive" }); }
-                      finally { setWithdrawing(false); }
-                    }} className="shrink-0 gap-1.5">
-                      {withdrawing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
-                      Withdraw ${(walletData?.earnings.withdrawable ?? 0).toFixed(2)} USDC
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                {/* Commission history */}
-                {(walletData?.splits?.length ?? 0) > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">Commission History</CardTitle>
-                      <CardDescription>Your share of platform revenue events.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        {walletData!.splits.map((s: any) => (
-                          <div key={s.id} className="flex items-center justify-between p-3 rounded-lg border border-border/30 bg-muted/10 text-sm">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-2 h-2 rounded-full shrink-0 ${s.status === "paid" ? "bg-green-500" : s.status === "approved" ? "bg-amber-400" : "bg-muted-foreground/40"}`} />
-                              <div>
-                                <p className="text-xs font-medium capitalize">{s.recipientType?.replace("_"," ")}</p>
-                                <p className="text-[10px] text-muted-foreground">{s.paidAt ? formatDistanceToNow(new Date(s.paidAt), { addSuffix: true }) : formatDistanceToNow(new Date(s.createdAt), { addSuffix: true })}</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-mono font-bold text-primary">${Number(s.splitAmount).toFixed(2)}</p>
-                              <p className="text-[10px] text-muted-foreground capitalize">{s.status}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
                 {/* NFT progress */}
                 {nftData && (
                   <Card className="border-border/50 bg-card/60 backdrop-blur-sm">
@@ -729,6 +610,139 @@ export default function Dashboard() {
               <div className="text-center py-16 text-muted-foreground">
                 <Bot className="w-10 h-10 mx-auto mb-3 opacity-30" />
                 <p className="text-sm">Could not load agent data.</p>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── Wallet Tab ────────────────────────────────────────────────── */}
+          <TabsContent value="wallet" className="space-y-5">
+            {/* Earnings summary */}
+            <div className="grid grid-cols-3 gap-4">
+              {walletLoading ? [...Array(3)].map((_,i) => <Skeleton key={i} className="h-24 rounded-xl" />) : (
+                <>
+                  <Card className="border-primary/20 bg-primary/5">
+                    <CardContent className="p-5">
+                      <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Available</p>
+                      <p className="text-3xl font-bold font-display text-primary">${(walletData?.earnings.withdrawable ?? 0).toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground mt-1">USDC on Base</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-5">
+                      <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Paid Out</p>
+                      <p className="text-3xl font-bold font-display">${(walletData?.earnings.paid ?? 0).toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground mt-1">All time</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-5">
+                      <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Pending</p>
+                      <p className="text-3xl font-bold font-display">${(walletData?.earnings.pending ?? 0).toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Awaiting approval</p>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </div>
+
+            {/* Withdrawal address */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base"><Wallet className="w-4 h-4 text-primary" /> Withdrawal Address</CardTitle>
+                <CardDescription>Your Base wallet address for USDC payouts.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Input placeholder="0x..." value={walletAddressInput} onChange={e => setWalletAddressInput(e.target.value)} className="font-mono text-sm" />
+                  <Button variant="outline" disabled={savingAddress || !walletAddressInput} onClick={async () => {
+                    setSavingAddress(true);
+                    try {
+                      const r = await fetch("/api/dashboard/wallet/address", { method: "POST", headers: authHeaders, body: JSON.stringify({ address: walletAddressInput }) });
+                      const d = await r.json();
+                      if (!d.ok) throw new Error(d.error ?? "Failed");
+                      await refetchWallet();
+                      toast({ title: "Wallet address saved" });
+                    } catch (e: any) { toast({ title: "Save failed", description: e.message, variant: "destructive" }); }
+                    finally { setSavingAddress(false); }
+                  }} className="shrink-0">
+                    {savingAddress ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                    <span className="ml-1.5">Save</span>
+                  </Button>
+                </div>
+                {walletData?.walletAddress && (
+                  <div className="flex items-center gap-2 text-xs text-green-400">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    Saved: <span className="font-mono">{walletData.walletAddress.slice(0,10)}…{walletData.walletAddress.slice(-6)}</span>
+                  </div>
+                )}
+                {!walletData?.walletAddress && !walletLoading && (
+                  <div className="flex items-center gap-2 text-xs text-amber-400">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    No withdrawal address set. Add one above to receive payouts.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Withdraw action */}
+            <Card className="border-primary/20">
+              <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <p className="font-semibold text-sm">Request Withdrawal</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Queue your pending commissions for USDC payout.
+                    {(walletData?.earnings.withdrawable ?? 0) === 0 && " No pending balance right now."}
+                  </p>
+                </div>
+                <Button disabled={withdrawing || !walletData?.walletAddress || (walletData?.earnings.withdrawable ?? 0) === 0} onClick={async () => {
+                  setWithdrawing(true);
+                  try {
+                    const r = await fetch("/api/dashboard/wallet/withdraw", { method: "POST", headers: authHeaders });
+                    const d = await r.json();
+                    if (!d.ok && !d.message) throw new Error(d.error ?? "Failed");
+                    await refetchWallet();
+                    toast({ title: "Withdrawal queued", description: d.message });
+                  } catch (e: any) { toast({ title: "Withdrawal failed", description: e.message, variant: "destructive" }); }
+                  finally { setWithdrawing(false); }
+                }} className="shrink-0 gap-1.5">
+                  {withdrawing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
+                  Withdraw ${(walletData?.earnings.withdrawable ?? 0).toFixed(2)} USDC
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Commission history */}
+            {walletLoading ? <Skeleton className="h-40 rounded-xl" /> : (walletData?.splits?.length ?? 0) > 0 ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Commission History</CardTitle>
+                  <CardDescription>Your share of platform revenue events.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {walletData!.splits.map((s: any) => (
+                      <div key={s.id} className="flex items-center justify-between p-3 rounded-lg border border-border/30 bg-muted/10 text-sm">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${s.status === "paid" ? "bg-green-500" : s.status === "approved" ? "bg-amber-400" : "bg-muted-foreground/40"}`} />
+                          <div>
+                            <p className="text-xs font-medium capitalize">{s.recipientType?.replace("_"," ")}</p>
+                            <p className="text-[10px] text-muted-foreground">{s.paidAt ? formatDistanceToNow(new Date(s.paidAt), { addSuffix: true }) : formatDistanceToNow(new Date(s.createdAt), { addSuffix: true })}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-mono font-bold text-primary">${Number(s.splitAmount).toFixed(2)}</p>
+                          <p className="text-[10px] text-muted-foreground capitalize">{s.status}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-xl">
+                <Coins className="w-8 h-8 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">No commission events yet.</p>
+                <p className="text-xs mt-1">Earnings appear here when the agent generates conversions through your slot.</p>
               </div>
             )}
           </TabsContent>
