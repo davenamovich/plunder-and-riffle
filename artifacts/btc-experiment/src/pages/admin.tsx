@@ -2325,7 +2325,7 @@ function SportsTipsTab({ token }: { token: string | null }) {
           <CardContent className="space-y-3">
             <div className="flex items-center gap-2 text-sm">
               <span className="w-2 h-2 rounded-full bg-green-500" />
-              <span>Bot — <code className="text-xs bg-muted px-1 py-0.5 rounded">@Vessel26bot</code></span>
+              <span>Bot — <code className="text-xs bg-muted px-1 py-0.5 rounded">@Vessel26bot</code> → <code className="text-xs bg-muted px-1 py-0.5 rounded">@agenticintel</code></span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <span className="w-2 h-2 rounded-full bg-blue-500" />

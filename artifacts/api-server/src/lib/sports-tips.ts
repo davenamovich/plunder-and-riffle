@@ -12,7 +12,20 @@
 import { hasBudget } from "./moltis.js";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHANNEL_ID = process.env.TELEGRAM_CHANNEL_ID;
+
+// Normalise channel ID — accept @username, numeric ID, or https://t.me/username
+function normaliseChatId(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  // t.me URL → @username
+  const tme = trimmed.match(/t\.me\/([A-Za-z0-9_]+)/);
+  if (tme) return `@${tme[1]}`;
+  // bare username without @ → add @
+  if (/^[A-Za-z][A-Za-z0-9_]{3,}$/.test(trimmed)) return `@${trimmed}`;
+  return trimmed; // already @username or numeric -100xxx
+}
+
+const TELEGRAM_CHANNEL_ID = normaliseChatId(process.env.TELEGRAM_CHANNEL_ID);
 
 // ─── Telegram ─────────────────────────────────────────────────────────────────
 
