@@ -20,6 +20,7 @@ import { classifyRawLeads, draftScoredLeads } from "./ralph.js";
 import { getDailyUsage } from "./moltis.js";
 import { seedDefaultSequenceIfNeeded } from "./dm.js";
 import { runAllAgentEngines } from "./agent-engine.js";
+import { runSportsTipsEngine } from "./sports-tips.js";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -118,6 +119,21 @@ export function startWorker() {
     }
   }, 30 * MINUTE);
 
+  // Sports tips — twice daily (9am + 7pm UTC equivalent: 6h intervals after first run)
+  // First run at startup is deferred; then every 6 hours
+  setInterval(async () => {
+    const hour = new Date().getUTCHours();
+    // Only post during reasonable hours (7am–10pm UTC)
+    if (hour >= 7 && hour <= 22) {
+      try {
+        const result = await runSportsTipsEngine("scheduler");
+        console.log(`[worker] sports-tips: fixtures=${result.fixturesFound}, tips=${result.tipsSent}`);
+      } catch (err) {
+        console.error("[worker] sports-tips tick error:", err);
+      }
+    }
+  }, 6 * 60 * MINUTE);
+
   // Run immediately on start to catch any queue backlog
   setTimeout(async () => {
     await seedDefaultSequenceIfNeeded();
@@ -127,5 +143,5 @@ export function startWorker() {
     runAllAgentEngines().catch(err => console.error("[worker] engine startup:", err));
   }, 5 * SECOND);
 
-  console.log("[worker] scheduled: expire=30s, classify=15m (batch), draft=20m (batch), caps=60m, engine=30m");
+  console.log("[worker] scheduled: expire=30s, classify=15m (batch), draft=20m (batch), caps=60m, engine=30m, sports-tips=6h");
 }

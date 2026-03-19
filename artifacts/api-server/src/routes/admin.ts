@@ -6,6 +6,7 @@ import { requireAdmin } from "../lib/auth.js";
 import { createAgentWallet, isCDPConfigured } from "../lib/cdp.js";
 import { moltisStatusWithUsage, getDailyUsage } from "../lib/moltis.js";
 import { runRalphLoop, approveLead, rejectLead as ralphRejectLead, markLeadPosted } from "../lib/ralph.js";
+import { runSportsTipsEngine, pingTelegram } from "../lib/sports-tips.js";
 import { getFunnelSummary, getRecentEvents } from "../lib/funnel.js";
 import {
   getAllSequences, getDmQueue, triggerDmForLead,
@@ -237,6 +238,28 @@ router.post("/admin/ralph/run", requireAdmin, async (req, res) => {
   try {
     const result = await runRalphLoop();
     res.json({ success: true, ...result });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── Sports Tips ───────────────────────────────────────────────────────────────
+
+router.post("/admin/sports-tips/run", requireAdmin, async (req, res) => {
+  try {
+    const result = await runSportsTipsEngine("admin");
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/admin/sports-tips/ping", requireAdmin, async (req, res) => {
+  try {
+    const ok = await pingTelegram();
+    res.json({ success: ok });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

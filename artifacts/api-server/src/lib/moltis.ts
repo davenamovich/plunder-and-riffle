@@ -54,6 +54,10 @@ export async function hasBudget(callsNeeded = 1): Promise<boolean> {
 
 // ─── Raw Chutes chat call ─────────────────────────────────────────────────────
 
+export async function chatOnce(systemPrompt: string, userMessage: string, temperature = 0.7): Promise<string> {
+  return chat(systemPrompt, userMessage, temperature);
+}
+
 async function chat(systemPrompt: string, userMessage: string, temperature = 0.2): Promise<string> {
   const res = await fetch(`${CHUTES_BASE_URL}/chat/completions`, {
     method: "POST",

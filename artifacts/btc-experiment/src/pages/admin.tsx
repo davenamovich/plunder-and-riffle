@@ -398,7 +398,7 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="ralph" className="w-full">
-        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-10 h-11 mb-8">
+        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-11 h-11 mb-8">
           <TabsTrigger value="ralph" className="flex items-center gap-1.5">
             <Bot className="w-3.5 h-3.5" /> Ralph
           </TabsTrigger>
@@ -423,6 +423,9 @@ export default function Admin() {
           </TabsTrigger>
           <TabsTrigger value="chat" className="flex items-center gap-1.5">
             <MessageSquare className="w-3.5 h-3.5" /> Chat
+          </TabsTrigger>
+          <TabsTrigger value="sports" className="flex items-center gap-1.5">
+            ⚽ Tips
           </TabsTrigger>
         </TabsList>
 
@@ -1179,6 +1182,11 @@ export default function Admin() {
         {/* ── CHAT TAB ── */}
         <TabsContent value="chat">
           <MoltisChatTab token={token} />
+        </TabsContent>
+
+        {/* ── SPORTS TIPS TAB ── */}
+        <TabsContent value="sports">
+          <SportsTipsTab token={token} />
         </TabsContent>
 
       </Tabs>
@@ -2236,6 +2244,176 @@ function OffersTab({ token }: { token: string | null }) {
           </Table>
         </Card>
       )}
+    </div>
+  );
+}
+
+
+// ─── Sports Tips Tab ─────────────────────────────────────────────────────────
+
+function SportsTipsTab({ token }: { token: string | null }) {
+  const [running, setRunning] = React.useState(false);
+  const [pinging, setPinging] = React.useState(false);
+  const [lastResult, setLastResult] = React.useState<any>(null);
+  const [pingResult, setPingResult] = React.useState<boolean | null>(null);
+  const { toast } = useToast();
+
+  const handleRun = async () => {
+    setRunning(true);
+    setLastResult(null);
+    try {
+      const res = await fetch("/api/admin/sports-tips/run", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      setLastResult(data);
+      if (data.success) {
+        toast({ title: "Tips sent", description: `${data.tipsSent} tip(s) posted to Telegram.` });
+      } else {
+        toast({ title: "Error", description: data.error || "Something went wrong.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Request failed.", variant: "destructive" });
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const handlePing = async () => {
+    setPinging(true);
+    setPingResult(null);
+    try {
+      const res = await fetch("/api/admin/sports-tips/ping", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      setPingResult(data.success);
+      toast({
+        title: data.success ? "Ping sent" : "Ping failed",
+        description: data.success ? "Check your Telegram channel." : "Could not reach Telegram. Check bot is admin of the channel.",
+        variant: data.success ? "default" : "destructive",
+      });
+    } catch {
+      setPingResult(false);
+      toast({ title: "Error", description: "Request failed.", variant: "destructive" });
+    } finally {
+      setPinging(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">⚽ Sports Tips Channel</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Deadpan AI tips posted to Telegram. Free daily fixtures, calm analysis, zero hype.
+            Runs automatically every 6 hours during daylight UTC hours.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+              Channel Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="w-2 h-2 rounded-full bg-green-500" />
+              <span>Bot — <code className="text-xs bg-muted px-1 py-0.5 rounded">@Vessel26bot</code></span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              <span>Schedule: every 6h (7am–10pm UTC)</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              <span>Sources: TheSportsDB (free), Polymarket signals</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="w-2 h-2 rounded-full bg-purple-500" />
+              <span>LLM: Chutes.ai — deadpan sports fan persona</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+              The Sports Fan
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex gap-4 items-start">
+            <img
+              src="/characters/char_sports_fan.png"
+              alt="Sports Fan"
+              className="w-16 h-20 rounded object-cover border border-border flex-shrink-0"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground">The Sports Fan</p>
+              <p>Calm. Researched. Slightly world-weary. Has done the analysis so you don't have to.</p>
+              <p className="text-xs italic">"The stats suggest it. That's all I'm saying."</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            Manual Controls
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={handlePing} disabled={pinging} variant="outline" size="sm">
+              {pinging ? "Pinging…" : "📡 Ping Channel"}
+            </Button>
+            <Button onClick={handleRun} disabled={running} size="sm">
+              {running ? "Fetching fixtures & posting…" : "⚽ Run Tips Now"}
+            </Button>
+          </div>
+          {pingResult !== null && (
+            <p className={`text-sm ${pingResult ? "text-green-600" : "text-destructive"}`}>
+              {pingResult ? "✓ Ping delivered to channel." : "✗ Ping failed — ensure bot is an admin of the channel."}
+            </p>
+          )}
+          {lastResult && (
+            <div className="rounded-md border p-3 text-sm space-y-1 bg-muted/30">
+              <p className="font-medium">{lastResult.success ? "✓ Run complete" : "✗ Run failed"}</p>
+              {lastResult.success && (
+                <>
+                  <p className="text-muted-foreground">Fixtures found: <strong>{lastResult.fixturesFound}</strong></p>
+                  <p className="text-muted-foreground">Tips sent: <strong>{lastResult.tipsSent}</strong></p>
+                  <p className="text-muted-foreground">Briefing sent: <strong>{lastResult.briefingSent ? "yes" : "no"}</strong></p>
+                </>
+              )}
+              {lastResult.error && <p className="text-destructive">{lastResult.error}</p>}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-dashed">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            How It Works
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground space-y-2">
+          <p>1. <strong>Fetch fixtures</strong> — pulls today's soccer matches from TheSportsDB (free, no key needed).</p>
+          <p>2. <strong>Polymarket signals</strong> — checks prediction market odds for matching teams.</p>
+          <p>3. <strong>LLM generation</strong> — Chutes.ai writes a deadpan pick per fixture (result, goals, BTTS, or corners).</p>
+          <p>4. <strong>Telegram post</strong> — morning briefing + tips sent with a short delay between each.</p>
+          <p>5. <strong>Fallback</strong> — if no fixtures found, handcrafted deadpan copy is used. Always posts something.</p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
