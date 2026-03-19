@@ -1,108 +1,60 @@
-# Workspace
-
-## Overview
-
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+# Plunder and Riffle — Deadpan AI Lead Gen Platform
 
 ## Stack
-
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
+- **Frontend**: React + Vite, TypeScript, Tailwind, ShadCN UI
+- **Backend**: Express, Node.js, TypeScript
 - **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+- **Package Manager**: pnpm monorepo
+- **AI**: Chutes.ai (Mistral-Small via OpenAI-compatible API)
+- **Web3**: CDP SDK v2 (Coinbase), Base mainnet, Privy wallets
+- **Auth**: Privy email login → JWT tokens
+- **Email**: AgentMail.to per-agent inboxes (ralph@agentmail.to, etc.)
+- **Social**: Composio (Twitter, Facebook, Instagram posting)
 
-## Structure
+## Features
+- **Agent Fleet**: Ralph & Brody generate leads & post content (deadpan mockumentary tone)
+- **Referral System**: Users get slots via referral links; agents earn USDC splits (25/25/25/25: PM, Ops, Protocol, Referrer)
+- **Lead Funnel**: ICP targeting → AI drafting → approval → funnel tracking
+- **Commerce**: Stripe payments for premium slots (paid vs free)
+- **Onchain**: ERC-8004 agent registry (Base mainnet), wallet provisioning via CDP, USDC sweeps
 
-```text
-artifacts-monorepo/
-├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
-├── lib/                    # Shared libraries
-│   ├── api-spec/           # OpenAPI spec + Orval codegen config
-│   ├── api-client-react/   # Generated React Query hooks
-│   ├── api-zod/            # Generated Zod schemas from OpenAPI
-│   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
-```
+## Key Files
+- `artifacts/api-server/src/lib/moltis.ts` — LLM client (Chutes.ai, batch calls, daily budget)
+- `artifacts/api-server/src/lib/composio.ts` — Social posting (Twitter, FB, IG; charLimits & platform-specific logic)
+- `artifacts/api-server/src/lib/agent-engine.ts` — Content generation & posting loop per agent
+- `artifacts/api-server/src/lib/agentmail.ts` — Agent email inbox provisioning & message mgmt
+- `artifacts/api-server/src/lib/cdp.ts` — Wallet creation & sweeps via Coinbase CDP SDK v2
+- `artifacts/api-server/src/routes/auth.ts` — OTP + **Privy email login** (`/api/auth/privy-login`)
+- `artifacts/btc-experiment/src/components/login-dialog.tsx` — Privy-only email auth UI
+- `artifacts/btc-experiment/src/pages/admin.tsx` — Fleet management, agent controls, inbox creation
+- `lib/db/src/schema/agents.ts` — agentsTable + agentmailInboxId, agentmailAddress, agentmailCreatedAt columns
 
-## TypeScript & Composite Projects
+## Auth Flow (Privy)
+1. User clicks "Sign in" → Privy email login modal opens
+2. User authenticates via Privy (email verification)
+3. Frontend calls `POST /api/auth/privy-login` with email
+4. Backend creates/gets user, issues JWT token
+5. User is logged in; can access dashboard, manage agents, view referral links
 
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
+## Secrets
+- `PRIVY_APP_ID` → Privy app ID (app-level OAuth)
+- `PRIVY_APP_SECRET` → Privy server secret (not needed for client-side auth)
+- `CHUTES_API_KEY` → LLM access via Chutes.ai
+- `AGENTMAIL_API_KEY` → Agent email inbox provisioning
+- `CDP_API_KEY`, `CDP_KEY_ID` → Coinbase CDP wallet provisioning
+- `COMPOSIO_API_KEY` → Social posting integrations
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID` → Bot ops alerts
+- `TWITTER_*` → Twitter auth
+- `LARRYBRAIN_API_KEY` → Ralph brain (external memory service)
 
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
+## Workflows
+- `Moltis: AI Gateway` — BROKEN; Chutes.ai is called directly from API server instead
+- `artifacts/api-server: API Server` — Node server on port 8080
+- `artifacts/btc-experiment: web` — Vite dev on dynamic port (currently 21251)
+- `artifacts/mockup-sandbox: Component Preview Server` — Component preview server on port 8082
 
-## Root Scripts
-
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
-- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
-
-## Packages
-
-### `artifacts/api-server` (`@workspace/api-server`)
-
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence. Also runs background worker and Ralph loop inside same process.
-
-- Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`, starts background worker
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health`
-- `src/lib/cdp.ts` — **CDP SDK v2** (`@coinbase/cdp-sdk`). Uses `CdpClient` + `cdp.evm.getOrCreateAccount({ name })` for idempotent wallet provisioning. No seed storage — keys managed server-side. Balance queries via viem public client. Sweeps via `cdp.evm.sendTransaction`. Account names: agents = `"agent-<slug>"`, users = `"user-<sanitized-email>"`. Env: `CDP_KEY_ID`, `CDP_API_KEY`, `CDP_WALLET_SECRET`. Requires `bs58` installed at workspace root (peer dep of CDP SDK).
-- `src/lib/pricing.ts` — `calculateCurrentPrice(agent)` returns `{ currentPrice, mode, flashSaleActive, surgeMultiplier, occupancyRate, ... }`. Modes: `fixed`, `dynamic` (surge × occupancy rate), `flash_sale` (overrides everything). Called by `/api/agents` endpoint; also available for admin/checkout flows.
-- `src/lib/moltis.ts` — Chutes.ai LLM client (OpenAI-compatible, `https://llm.chutes.ai/v1`). **Batch API**: N leads → 1 call. Daily budget tracker (DB-backed, hard stop at 1900/2000). Falls back to keyword heuristic when `CHUTES_API_KEY` not set. Exports: `batchClassifyLeads()`, `batchDraftResponses()`, `classifyLead()`, `draftResponse()`, `buildIcpFromUrl()`, `getDailyUsage()`, `hasBudget()`, `moltisStatusWithUsage()`
-- `src/lib/ralph.ts` — Ralph loop pipeline: `classifyRawLeads()`, `draftScoredLeads()`, `runRalphLoop()`. Lead stages: raw → scored → pending_approval → approved → posted. Batch size: 20 leads per API call.
-- `src/lib/worker.ts` — Background scheduler (setInterval): expire slots (30s), classify batch (15m), draft batch (20m), reset daily caps (60m). Budget-aware scheduling.
-- Admin endpoints: `GET /api/admin/ralph/status` (includes usage), `POST /api/admin/ralph/run`, `GET /api/admin/usage`
-- Lead endpoints: ingest, list, approve, reject, post, classify (manual), draft (manual)
-- Env vars: `CHUTES_API_KEY`, `CHUTES_BASE_URL` (default: https://llm.chutes.ai/v1), `CHUTES_MODEL` (default: chutesai/Mistral-Small-3.2-24B-Instruct-2506), `CHUTES_DAILY_CAP` (default: 2000)
-- Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
-
-### `lib/db` (`@workspace/db`)
-
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
-
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
-
-Production migrations are tracked via Drizzle's migration system. The API server auto-applies pending migrations at startup using `runMigrations()` from `lib/db/src/migrate.ts`. After any schema change, run `pnpm --filter @workspace/db run push` (dev) and `pnpm --filter @workspace/db run generate` (creates SQL migration file). Mark the new migration as applied if the DB was already updated via push: insert into `drizzle.__drizzle_migrations`.
-
-**ICP Onboarding Flow** — users land on `/`, select their role (chip or text input), are redirected to `/icp?role=...`. ICP page shows personalized copy (pain points, why this helps) and collects email. On submit, `POST /api/onboarding/start` creates/finds the user, sets `roleLabel`/`walletStatus=pending`/`onboardingSource=icp`, activates a 24h free rotator slot, and returns a JWT token. Frontend stores token in `localStorage` key `"token"` and redirects to `/agent/ralph?new=1`. Role copy utility: `artifacts/btc-experiment/src/lib/icp.ts`.
-
-**Auth System — Custom OTP (Privy removed)**: Privy was removed entirely (iframe failed in Replit proxy). Custom OTP flow: `POST /api/auth/send-code` generates a 6-digit code, stores it in `otp_codes` DB table (expires 10 min), optionally emails via Resend if `RESEND_API_KEY` set, or returns `devCode` in response for dev mode. `POST /api/auth/verify-code` validates code (checks `usedAt IS NULL` + not expired), marks used, upserts user, returns JWT. Rate limit: one active code per email per 60s. `use-auth.tsx` is a pure React context (no Privy hooks), manages token in localStorage and session restore via `GET /api/auth/me`. Login is triggered by `login()` from `useAuth()` — opens `LoginDialog` modal (email step → code step with dev banner). New DB table: `lib/db/src/schema/otp-codes.ts`. Email sender: `artifacts/api-server/src/lib/mailer.ts`.
-
-### `lib/api-spec` (`@workspace/api-spec`)
-
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
-
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
-
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
-
-### `lib/api-zod` (`@workspace/api-zod`)
-
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
-
-### `lib/api-client-react` (`@workspace/api-client-react`)
-
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
-
-### `scripts` (`@workspace/scripts`)
-
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+## TODO / Known Issues
+- **Moltis binary**: Not installed; gateway workflow fails. API calls Chutes directly, so not blocking.
+- **Brody video**: `artifacts/brody-video` created but not registered as artifact yet (needs `.replit-artifact/artifact.toml`, workflow setup)
+- **Avatar generation**: Chutes HunyuanImage works; needs storage solution (S3/object-storage)
+- **ERC-8004 gas**: Agents need ~$0.01 Base ETH at wallet before onchain registration

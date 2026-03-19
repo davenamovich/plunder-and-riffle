@@ -31,6 +31,99 @@ router.get("/auth/me", requireAuth, async (req, res) => {
   });
 });
 
+// POST /api/auth/privy-login — email login via Privy
+router.post("/auth/privy-login", async (req, res) => {
+  try {
+    const { email, referralCode } = req.body;
+    if (!email || typeof email !== "string" || !email.includes("@")) {
+      res.status(400).json({ error: "Valid email required" });
+      return;
+    }
+    const normalizedEmail = email.toLowerCase().trim();
+
+    let user = await db.select().from(usersTable).where(eq(usersTable.email, normalizedEmail)).limit(1).then(r => r[0]);
+
+    if (!user) {
+      let referredById: string | null = null;
+      if (referralCode) {
+        const referrer = await db.select().from(usersTable).where(eq(usersTable.referralCode, referralCode.toUpperCase())).limit(1).then(r => r[0]);
+        if (referrer) referredById = referrer.id;
+      }
+
+      let slug = generateUserSlug(normalizedEmail);
+      const existing = await db.select().from(usersTable).where(eq(usersTable.slug, slug)).limit(1).then(r => r[0]);
+      if (existing) {
+        slug = generateUserSlug(normalizedEmail, Math.random().toString(36).slice(2, 5));
+      }
+
+      const [newUser] = await db.insert(usersTable).values({
+        email: normalizedEmail,
+        slug,
+        displayName: normalizedEmail.split("@")[0],
+        referralCode: generateReferralCode(),
+        referredById,
+        walletStatus: "none",
+      }).returning();
+      user = newUser;
+
+      if (referredById) {
+        await db.insert(referralRotatorTable).values({
+          ownerId: referredById,
+          memberId: newUser.id,
+          isActive: true,
+        }).onConflictDoNothing();
+      }
+
+      // Auto-provision a CDP wallet for this new user (background)
+      if (isCDPConfigured()) {
+        setImmediate(async () => {
+          try {
+            const wallet = await createUserWallet(normalizedEmail);
+            await db.update(usersTable).set({
+              walletAddress: wallet.address,
+              walletStatus: "active",
+              cdpWalletId: wallet.walletId,
+              cdpWalletCreatedAt: new Date(),
+              updatedAt: new Date(),
+            }).where(eq(usersTable.id, newUser.id));
+          } catch (err) {
+            console.error(`[cdp] failed to auto-provision wallet for ${normalizedEmail}:`, err);
+          }
+        });
+      }
+    }
+
+    // Always ensure canonical admin emails have admin role
+    if (ADMIN_EMAILS.has(normalizedEmail) && user.role !== "admin") {
+      const [promoted] = await db.update(usersTable)
+        .set({ role: "admin", updatedAt: new Date() })
+        .where(eq(usersTable.id, user.id))
+        .returning();
+      if (promoted) user = promoted;
+      console.log(`[auth] promoted ${normalizedEmail} to admin`);
+    }
+
+    const token = signToken(user.id);
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        slug: user.slug,
+        displayName: user.displayName,
+        role: user.role,
+        createdAt: user.createdAt,
+        referralCode: user.referralCode,
+        walletAddress: user.walletAddress,
+        walletStatus: user.walletStatus,
+      },
+      token,
+    });
+  } catch (err: any) {
+    console.error("Privy login error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.post("/auth/login", async (req, res) => {
   try {
     const { email, referralCode, walletAddress } = req.body;

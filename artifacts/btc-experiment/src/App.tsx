@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
 import { Layout } from "@/components/layout";
+import { PrivyProvider } from "@privy-io/react-auth";
 
 import Landing from "@/pages/landing";
 import AgentPage from "@/pages/agent";
@@ -43,19 +44,29 @@ function Router() {
 
 function App() {
   const base = import.meta.env.BASE_URL ?? "/";
+  const privyAppId = import.meta.env.VITE_PRIVY_APP_ID || "clg..."; // will fail if not set
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <WouterRouter base={base.replace(/\/$/, "")}>
-            <Layout>
-              <Router />
-            </Layout>
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <PrivyProvider
+      appId={privyAppId}
+      config={{
+        appearance: { theme: "dark" },
+        loginMethods: ["email"],
+        embeddedWallets: { createOnLogin: "never" },
+      }}
+    >
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <WouterRouter base={base.replace(/\/$/, "")}>
+              <Layout>
+                <Router />
+              </Layout>
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </PrivyProvider>
   );
 }
 
