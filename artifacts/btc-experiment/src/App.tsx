@@ -52,7 +52,6 @@ function App() {
         appearance: { theme: "dark" },
         loginMethods: ["email"],
         embeddedWallets: { createOnLogin: "never" },
-        externalWallets: { solana: { connectors: [] } },
       }}
     >
       <QueryClientProvider client={queryClient}>
