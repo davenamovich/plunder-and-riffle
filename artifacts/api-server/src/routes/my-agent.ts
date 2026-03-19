@@ -95,6 +95,16 @@ router.get("/my-agent", requireAuth, async (req, res) => {
 
     if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
+    // Fetch referrer if user was referred by someone
+    let referrerData = null;
+    if (user.referredById) {
+      referrerData = await db.select({
+        id: usersTable.id,
+        displayName: usersTable.displayName,
+        referralCode: usersTable.referralCode,
+      }).from(usersTable).where(eq(usersTable.id, user.referredById)).limit(1).then(r => r[0] ?? null);
+    }
+
     const ownsAgent = !!ownedAgent;
     const assistantAgents = assistantRows.map(r => ({
       id: r.agent.id,
@@ -139,7 +149,9 @@ router.get("/my-agent", requireAuth, async (req, res) => {
         walletStatus: user.walletStatus ?? "none",
         referralCode: user.referralCode ?? user.slug,
         composioEntityId: user.composioEntityId ?? null,
+        referredById: user.referredById ?? null,
       },
+      referrer: referrerData,
       ownsAgent,
       ownedAgent,
       isAssistant: !ownsAgent && assistantAgents.length > 0,

@@ -414,7 +414,8 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="ralph" className="w-full">
-        <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-12 h-11 mb-8">
+        <div className="overflow-x-auto pb-2 mb-8 scrollbar-hide">
+          <TabsList className="inline-flex gap-1 h-11 bg-transparent border-b border-border/30 w-max">
           <TabsTrigger value="ralph" className="flex items-center gap-1.5">
             <Bot className="w-3.5 h-3.5" /> Ralph
           </TabsTrigger>
@@ -458,7 +459,8 @@ export default function Admin() {
           <TabsTrigger value="experiments" className="flex items-center gap-1.5">
             <BarChart2 className="w-3.5 h-3.5" /> Experiments
           </TabsTrigger>
-        </TabsList>
+          </TabsList>
+        </div>
 
         {/* ── RALPH TAB ── */}
         <TabsContent value="ralph" className="space-y-6">

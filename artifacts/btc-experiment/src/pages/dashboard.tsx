@@ -36,7 +36,8 @@ const APP_URL = (import.meta.env.VITE_APP_URL as string | undefined)?.replace(/\
 interface Tool { id: string; name: string; icon: string; status: "connected" | "disconnected"; }
 interface AssistantAgent { id: string; slug: string; name: string; assistantRecordId: string; }
 interface MyAgentData {
-  user: { id: string; email: string; slug: string; displayName: string | null; roleLabel: string | null; walletAddress: string | null; walletStatus: string; referralCode: string; composioEntityId: string | null; };
+  user: { id: string; email: string; slug: string; displayName: string | null; roleLabel: string | null; walletAddress: string | null; walletStatus: string; referralCode: string; composioEntityId: string | null; referredById: string | null; };
+  referrer: { id: string; displayName: string; referralCode: string } | null;
   ownsAgent: boolean; ownedAgent: { id: string; slug: string; name: string } | null;
   isAssistant: boolean; assistantAgents: AssistantAgent[];
   hasAgentAccess: boolean; primaryAgent: { id: string; slug: string; name: string } | null;
@@ -269,6 +270,7 @@ export default function Dashboard() {
   const activeSlotCount = slotsRes?.slots.filter(s => s.status === "active").length || 0;
   const userSlug = agentData?.user.slug ?? "";
   const referralCode = agentData?.user.referralCode ?? userSlug;
+  const referrer = agentData?.referrer;
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -291,6 +293,41 @@ export default function Dashboard() {
           </div>
         )}
       </motion.div>
+
+      {/* Referrer Card */}
+      {referrer && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mb-8">
+          <Card className="border-amber-500/30 bg-amber-500/5 overflow-hidden">
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Referred by</p>
+                  <p className="text-lg font-semibold">{referrer.displayName}</p>
+                  <p className="text-sm text-muted-foreground">Their offers are available to you. Use their link to earn them rewards.</p>
+                </div>
+                <div className="space-y-2 flex flex-col shrink-0">
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() => handleCopy(`${APP_URL}/r/${referrer.referralCode}`)}
+                    className="h-8 text-xs gap-1"
+                  >
+                    <Copy className="w-3.5 h-3.5" /> Copy Link
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => window.open(`${APP_URL}/r/${referrer.referralCode}`, '_blank')}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Stat Cards */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
