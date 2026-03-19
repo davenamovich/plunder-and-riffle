@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { agentsTable, rotatorSlotsTable, leadsTable } from "@workspace/db/schema";
 import { eq, and, gt, count, sql } from "drizzle-orm";
 import { optionalAuth } from "../lib/auth.js";
+import { buildAgentRegistrationJson } from "../lib/erc8004.js";
 
 const router = Router();
 
@@ -75,6 +76,39 @@ router.get("/agent/:slug/stats", async (req, res) => {
       todayLeads: agent.dailyLeadCount,
       totalClicks: agent.totalClicks,
     });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── GET /agent/:slug/.well-known/agent.json — ERC-8004 agent identity card ──
+// Served publicly so the IdentityRegistry can verify the agent URI on-chain.
+
+router.get("/agent/:slug/.well-known/agent.json", async (req, res) => {
+  try {
+    const agent = await db.select().from(agentsTable)
+      .where(eq(agentsTable.slug, req.params.slug)).limit(1).then(r => r[0]);
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+
+    const platformUrl = process.env.PLATFORM_URL
+      ?? (process.env.REPLIT_DEV_DOMAIN
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+        : "https://plunderandriffle.replit.app");
+
+    const json = buildAgentRegistrationJson({
+      name:        agent.name,
+      description: agent.description,
+      avatarUrl:   agent.avatarUrl,
+      slug:        agent.slug,
+      isPaused:    agent.isPaused,
+      platformUrl,
+    });
+
+    // Cache 60s in dev, 5min in prod
+    res.setHeader("Cache-Control", "public, max-age=60");
+    res.setHeader("Content-Type", "application/json");
+    res.json(json);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

@@ -5,6 +5,10 @@ import { scoreExperiment, funnelRates } from "../lib/scorer.js";
 import { eq, and, gt, count, sql, desc, gte, isNull as isNullDrizzle } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
 import { createAgentWallet, isCDPConfigured, getWalletBalances, sweepWallet } from "../lib/cdp.js";
+import { buildAgentRegistrationJson, registerAgentIdentity, IDENTITY_REGISTRY_ADDRESS } from "../lib/erc8004.js";
+import { CdpClient } from "@coinbase/cdp-sdk";
+import { createPublicClient, http } from "viem";
+import { base } from "viem/chains";
 import { moltisStatusWithUsage, getDailyUsage, chatOnce } from "../lib/moltis.js";
 import { runRalphLoop, approveLead, rejectLead as ralphRejectLead, markLeadPosted } from "../lib/ralph.js";
 import { runSportsTipsEngine, pingTelegram } from "../lib/sports-tips.js";
@@ -642,6 +646,10 @@ router.get("/admin/agents-fleet", requireAdmin, async (req, res) => {
         botOpsSweepThresholdUsd: agent.botOpsSweepThresholdUsd,
         ownerId: agent.ownerId,
         ownsAgent: adminUser?.id ? agent.ownerId === adminUser.id : false,
+        // ERC-8004
+        erc8004TokenId: agent.erc8004TokenId,
+        erc8004AgentUri: agent.erc8004AgentUri,
+        erc8004RegisteredAt: agent.erc8004RegisteredAt,
       };
     }));
     res.json({ agents: enriched, cdpConfigured: isCDPConfigured() });
@@ -850,6 +858,109 @@ router.post("/admin/agents/:id/create-wallet", requireAdmin, async (req, res) =>
     res.status(isRateLimit ? 429 : 500).json({
       error: isRateLimit ? "CDP rate limit hit. The system will retry automatically — wait 60s and try again." : (err?.message ?? "Wallet creation failed"),
       retryAfter: isRateLimit ? 60 : undefined,
+    });
+  }
+});
+
+// ─── ERC-8004 Onchain Agent Identity Registration ────────────────────────────
+// POST /api/admin/agents/:id/register-identity
+// Registers the agent with the ERC-8004 IdentityRegistry on Base mainnet.
+// Prerequisites: agent must have cdpWalletAddress + Base ETH for gas.
+
+router.post("/admin/agents/:id/register-identity", requireAdmin, async (req, res) => {
+  try {
+    const agent = await db.select({
+      id: agentsTable.id, slug: agentsTable.slug, name: agentsTable.name,
+      description: agentsTable.description, avatarUrl: agentsTable.avatarUrl,
+      isPaused: agentsTable.isPaused,
+      cdpWalletAddress: agentsTable.cdpWalletAddress,
+      erc8004TokenId: agentsTable.erc8004TokenId,
+    }).from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]);
+
+    if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+
+    if (agent.erc8004TokenId) {
+      res.json({
+        ok: true,
+        alreadyRegistered: true,
+        agentId: agent.erc8004TokenId,
+        message: `Agent already registered with token ID ${agent.erc8004TokenId}`,
+      });
+      return;
+    }
+
+    if (!agent.cdpWalletAddress) {
+      res.status(400).json({
+        error: "Agent has no CDP wallet. Provision a wallet first.",
+        hint: "POST /api/admin/agents/:id/create-wallet or wait for auto-provisioning.",
+      });
+      return;
+    }
+
+    if (!isCDPConfigured()) {
+      res.status(503).json({ error: "CDP not configured — check CDP_KEY_ID / CDP_API_KEY / CDP_WALLET_SECRET" });
+      return;
+    }
+
+    const platformUrl = process.env.PLATFORM_URL
+      ?? (process.env.REPLIT_DEV_DOMAIN
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+        : "https://plunderandriffle.replit.app");
+
+    const agentUri = `${platformUrl}/api/agent/${agent.slug}/.well-known/agent.json`;
+
+    console.log(`[erc8004] registering ${agent.slug} at ${agentUri} from ${agent.cdpWalletAddress}…`);
+
+    // Validate the well-known JSON endpoint is reachable before submitting tx
+    const identityJson = buildAgentRegistrationJson({
+      name:        agent.name,
+      description: agent.description,
+      avatarUrl:   agent.avatarUrl,
+      slug:        agent.slug,
+      isPaused:    agent.isPaused,
+      platformUrl,
+    });
+
+    // Initialise CDP client + viem public client on Base
+    const apiKeyId     = process.env.CDP_KEY_ID!;
+    const apiKeySecret = process.env.CDP_API_KEY!;
+    const walletSecret = process.env.CDP_WALLET_SECRET!;
+    const cdp          = new CdpClient({ apiKeyId, apiKeySecret, walletSecret });
+    const viemClient   = createPublicClient({ chain: base, transport: http() });
+
+    const { agentId, txHash, agentUri: registeredUri } = await registerAgentIdentity(
+      cdp,
+      viemClient,
+      agent.cdpWalletAddress as `0x${string}`,
+      agentUri,
+    );
+
+    // Store in DB
+    await db.update(agentsTable).set({
+      erc8004TokenId:      agentId,
+      erc8004AgentUri:     registeredUri,
+      erc8004RegisteredAt: new Date(),
+      updatedAt:           new Date(),
+    }).where(eq(agentsTable.id, agent.id));
+
+    console.log(`[erc8004] ${agent.slug} registered — tokenId=${agentId}, tx=${txHash}`);
+    res.json({
+      ok:               true,
+      agentId,
+      txHash,
+      agentUri:         registeredUri,
+      identityRegistry: IDENTITY_REGISTRY_ADDRESS,
+      network:          "base",
+      identityJson,
+    });
+  } catch (err: any) {
+    console.error("[erc8004] registration failed:", err?.message);
+    const isNoGas = err?.message?.toLowerCase().includes("insufficient") || err?.message?.includes("gas");
+    res.status(500).json({
+      error: err?.message ?? "ERC-8004 registration failed",
+      hint: isNoGas
+        ? `Agent wallet needs Base ETH for gas. Fund ${(await db.select({ addr: agentsTable.cdpWalletAddress }).from(agentsTable).where(eq(agentsTable.id, req.params.id)).limit(1).then(r => r[0]?.addr)) ?? "the wallet"} with ~0.01 Base ETH.`
+        : undefined,
     });
   }
 });

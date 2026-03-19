@@ -73,6 +73,10 @@ export const agentsTable = pgTable("agents", {
   botOpsSweepThresholdUsd: real("bot_ops_sweep_threshold_usd").notNull().default(10),
   protocolWalletAddress: text("protocol_wallet_address"),
   adminWalletAddress: text("admin_wallet_address"),
+  // ERC-8004 Onchain Agent Identity Registry (base mainnet, Jan 2026)
+  erc8004TokenId: text("erc8004_token_id"),          // uint256 returned from register()
+  erc8004AgentUri: text("erc8004_agent_uri"),         // URI used at registration time
+  erc8004RegisteredAt: timestamp("erc8004_registered_at"),
   // Agent Engine
   engineEnabled: boolean("engine_enabled").notNull().default(false),
   enginePublic: boolean("engine_public").notNull().default(false),
