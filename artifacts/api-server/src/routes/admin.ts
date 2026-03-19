@@ -21,17 +21,19 @@ router.get("/admin/settings", requireAdmin, async (req, res) => {
     const agent = await db.select().from(agentsTable).where(eq(agentsTable.slug, "ralph")).limit(1).then(r => r[0]);
     if (!agent) { res.status(404).json({ error: "Main agent not found" }); return; }
     res.json({
-      freeSlotCapacity:  agent.freeSlotCapacity,
-      paidSlotCapacity:  agent.paidSlotCapacity,
-      freeSlotWeight:    agent.freeSlotWeight,
-      paidSlotWeight:    agent.paidSlotWeight,
-      slotDurationHours: agent.slotDurationHours,
-      dailyCap:          agent.dailyCap,
-      fallbackUrl:       agent.fallbackUrl || "",
-      isPaused:          agent.isPaused,
-      leadApprovalMode:  agent.leadApprovalMode,
-      nftMintEnabled:    agent.nftMintEnabled,
-      paidSlotPrice:     agent.paidSlotPrice,
+      freeSlotCapacity:     agent.freeSlotCapacity,
+      paidSlotCapacity:     agent.paidSlotCapacity,
+      freeSlotWeight:       agent.freeSlotWeight,
+      paidSlotWeight:       agent.paidSlotWeight,
+      slotDurationHours:    agent.slotDurationHours,
+      dailyCap:             agent.dailyCap,
+      fallbackUrl:          agent.fallbackUrl || "",
+      isPaused:             agent.isPaused,
+      leadApprovalMode:     agent.leadApprovalMode,
+      nftMintEnabled:       agent.nftMintEnabled,
+      paidSlotPrice:        agent.paidSlotPrice,
+      nftReferralThreshold: agent.nftReferralThreshold,
+      nftViralThreshold:    agent.nftViralThreshold,
     });
   } catch (err) {
     console.error(err);
@@ -45,24 +47,26 @@ router.put("/admin/settings", requireAdmin, async (req, res) => {
     if (!agent) { res.status(404).json({ error: "Main agent not found" }); return; }
 
     const updates: Partial<typeof agent> = {};
-    const allowed = ["freeSlotCapacity","paidSlotCapacity","freeSlotWeight","paidSlotWeight","slotDurationHours","dailyCap","fallbackUrl","isPaused","leadApprovalMode","nftMintEnabled","paidSlotPrice"];
+    const allowed = ["freeSlotCapacity","paidSlotCapacity","freeSlotWeight","paidSlotWeight","slotDurationHours","dailyCap","fallbackUrl","isPaused","leadApprovalMode","nftMintEnabled","paidSlotPrice","nftReferralThreshold","nftViralThreshold"];
     for (const key of allowed) {
       if (req.body[key] !== undefined) (updates as any)[key] = req.body[key];
     }
 
     const [updated] = await db.update(agentsTable).set({ ...updates, updatedAt: new Date() }).where(eq(agentsTable.slug, "ralph")).returning();
     res.json({
-      freeSlotCapacity:  updated.freeSlotCapacity,
-      paidSlotCapacity:  updated.paidSlotCapacity,
-      freeSlotWeight:    updated.freeSlotWeight,
-      paidSlotWeight:    updated.paidSlotWeight,
-      slotDurationHours: updated.slotDurationHours,
-      dailyCap:          updated.dailyCap,
-      fallbackUrl:       updated.fallbackUrl || "",
-      isPaused:          updated.isPaused,
-      leadApprovalMode:  updated.leadApprovalMode,
-      nftMintEnabled:    updated.nftMintEnabled,
-      paidSlotPrice:     updated.paidSlotPrice,
+      freeSlotCapacity:     updated.freeSlotCapacity,
+      paidSlotCapacity:     updated.paidSlotCapacity,
+      freeSlotWeight:       updated.freeSlotWeight,
+      paidSlotWeight:       updated.paidSlotWeight,
+      slotDurationHours:    updated.slotDurationHours,
+      dailyCap:             updated.dailyCap,
+      fallbackUrl:          updated.fallbackUrl || "",
+      isPaused:             updated.isPaused,
+      leadApprovalMode:     updated.leadApprovalMode,
+      nftMintEnabled:       updated.nftMintEnabled,
+      paidSlotPrice:        updated.paidSlotPrice,
+      nftReferralThreshold: updated.nftReferralThreshold,
+      nftViralThreshold:    updated.nftViralThreshold,
     });
   } catch (err) {
     console.error(err);

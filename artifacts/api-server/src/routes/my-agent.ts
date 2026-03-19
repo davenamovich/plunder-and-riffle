@@ -5,6 +5,21 @@ import { eq, and, gt, desc, count } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { NFT_REFERRAL_THRESHOLD, NFT_VIRAL_THRESHOLD } from "../lib/agent-engine.js";
 
+async function getLiveNFTThresholds(): Promise<{ referral: number; viral: number }> {
+  try {
+    const ralph = await db.select({
+      nftReferralThreshold: agentsTable.nftReferralThreshold,
+      nftViralThreshold: agentsTable.nftViralThreshold,
+    }).from(agentsTable).where(eq(agentsTable.slug, "ralph")).limit(1).then(r => r[0]);
+    return {
+      referral: ralph?.nftReferralThreshold ?? NFT_REFERRAL_THRESHOLD,
+      viral:    ralph?.nftViralThreshold    ?? NFT_VIRAL_THRESHOLD,
+    };
+  } catch {
+    return { referral: NFT_REFERRAL_THRESHOLD, viral: NFT_VIRAL_THRESHOLD };
+  }
+}
+
 const COMPOSIO_API_KEY = process.env.COMPOSIO_API_KEY || "";
 const COMPOSIO_BASE = "https://backend.composio.dev/api/v1";
 
@@ -257,13 +272,15 @@ router.get("/my-agent/nft-progress", requireAuth, async (req, res) => {
 
     if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
-    // Count referrals this user has made
-    const referralResult = await db.select({ cnt: count() }).from(usersTable)
-      .where(eq(usersTable.referredById, user.id));
+    // Count referrals this user has made and fetch live thresholds
+    const [referralResult, thresholds] = await Promise.all([
+      db.select({ cnt: count() }).from(usersTable).where(eq(usersTable.referredById, user.id)),
+      getLiveNFTThresholds(),
+    ]);
     const referralCount = Number(referralResult[0]?.cnt ?? 0);
 
     // Check if NFT should now be earned (in case engine hasn't run yet)
-    if (!user.nftEarned && (referralCount >= NFT_REFERRAL_THRESHOLD || user.viralPostCount >= NFT_VIRAL_THRESHOLD)) {
+    if (!user.nftEarned && (referralCount >= thresholds.referral || user.viralPostCount >= thresholds.viral)) {
       await db.update(usersTable).set({
         nftEarned: true,
         nftEarnedAt: new Date(),
@@ -276,8 +293,8 @@ router.get("/my-agent/nft-progress", requireAuth, async (req, res) => {
     res.json({
       referralCount,
       viralPostCount: user.viralPostCount,
-      referralThreshold: NFT_REFERRAL_THRESHOLD,
-      viralThreshold: NFT_VIRAL_THRESHOLD,
+      referralThreshold: thresholds.referral,
+      viralThreshold: thresholds.viral,
       nftEarned: user.nftEarned,
       nftEarnedAt: user.nftEarnedAt ?? null,
       nftClaimTxHash: user.nftClaimTxHash ?? null,

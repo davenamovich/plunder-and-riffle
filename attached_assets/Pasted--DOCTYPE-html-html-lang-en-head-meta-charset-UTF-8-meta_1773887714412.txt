@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cards for Humanity — Website Pain Point Scanner</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:ital,wght@0,400;0,700;1,400&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --void: #060608;
+  --surface: #0e0e12;
+  --panel: #13131a;
+  --border: #1e1e2a;
+  --accent: #ff2d55;
+  --cyan: #00d4ff;
+  --gold: #f5a623;
+  --green: #00ff88;
+  --muted: #5a5a7a;
+  --text: #e8e8f0;
+  --cream: #f0ead8;
+  --shadow-card: 8px 8px 0px rgba(0,0,0,0.9);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--void);
+  color: var(--text);
+  font-family: 'Barlow', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* SCANLINE EFFECT */
+body::after {
+  content:'';
+  position:fixed;
+  inset:0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  pointer-events:none;
+  z-index:999;
+}
+
+/* GRID BG */
+.grid-bg {
+  position:fixed;
+  inset:0;
+  background-image: 
+    linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events:none;
+}
+
+/* HERO */
+.hero {
+  text-align:center;
+  padding: 70px 20px 50px;
+  position:relative;
+}
+
+.agent-badge {
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  background: rgba(0,212,255,0.08);
+  border: 1px solid rgba(0,212,255,0.2);
+  padding: 8px 18px;
+  border-radius:2px;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11px;
+  color:var(--cyan);
+  letter-spacing:0.15em;
+  margin-bottom:28px;
+}
+
+.agent-dot {
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--cyan);
+  animation: livepulse 1.2s infinite;
+}
+
+@keyframes livepulse {
+  0%,100%{opacity:1;transform:scale(1);}
+  50%{opacity:0.4;transform:scale(0.7);}
+}
+
+h1 {
+  font-family:'Bebas Neue',sans-serif;
+  font-size: clamp(58px,11vw,130px);
+  line-height:0.88;
+  letter-spacing:0.02em;
+  color:var(--text);
+  margin-bottom:10px;
+}
+
+h1 .highlight { color:var(--accent); }
+
+.hero-sub {
+  font-family:'IBM Plex Mono',monospace;
+  font-size:13px;
+  color:var(--muted);
+  max-width:520px;
+  margin:20px auto 0;
+  line-height:1.8;
+}
+
+/* SCANNER BOX */
+.scanner-section {
+  max-width:760px;
+  margin:50px auto;
+  padding:0 20px;
+}
+
+.scanner-box {
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-top: 3px solid var(--cyan);
+  padding:40px;
+  position:relative;
+}
+
+.scanner-box::before {
+  content:'AGENT SCANNER v2.4';
+  position:absolute;
+  top:-1px;
+  left:24px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:9px;
+  letter-spacing:0.2em;
+  background:var(--cyan);
+  color:var(--void);
+  padding:3px 10px;
+}
+
+.input-row {
+  display:flex;
+  gap:0;
+  margin-bottom:16px;
+}
+
+.url-input {
+  flex:1;
+  background:#08080e;
+  border:1px solid var(--border);
+  border-right:none;
+  color:var(--text);
+  padding:16px 20px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:14px;
+  outline:none;
+  transition:border-color 0.2s;
+}
+.url-input:focus { border-color:var(--cyan); }
+.url-input::placeholder { color:#333; }
+
+.btn-scan {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:22px;
+  letter-spacing:0.12em;
+  background:var(--accent);
+  color:white;
+  border:none;
+  padding:16px 36px;
+  cursor:pointer;
+  transition:all 0.15s;
+  white-space:nowrap;
+}
+.btn-scan:hover { background:#ff4d6a; transform:translateY(-1px); }
+.btn-scan:disabled { background:#2a1a1f; color:#4a2a2f; cursor:not-allowed; transform:none; }
+
+.scanner-options {
+  display:flex;
+  gap:20px;
+  flex-wrap:wrap;
+}
+
+.option-chip {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:11px;
+  color:var(--muted);
+  cursor:pointer;
+  transition:color 0.15s;
+}
+.option-chip:hover { color:var(--text); }
+.option-chip input { accent-color:var(--cyan); }
+
+/* SCAN PROGRESS */
+.scan-progress {
+  display:none;
+  margin-top:30px;
+}
+
+.scan-progress.active { display:block; }
+
+.progress-log {
+  background:#08080e;
+  border:1px solid var(--border);
+  padding:20px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:12px;
+  color:var(--cyan);
+  height:120px;
+  overflow:hidden;
+  position:relative;
+}
+
+.log-line {
+  display:block;
+  margin-bottom:4px;
+  opacity:0;
+  animation: logIn 0.3s forwards;
+}
+
+@keyframes logIn {
+  from{opacity:0;transform:translateX(-10px);}
+  to{opacity:1;transform:translateX(0);}
+}
+
+.log-line .ts { color:var(--muted); margin-right:12px; }
+.log-line .ok { color:var(--green); }
+.log-line .warn { color:var(--gold); }
+
+.progress-bar-wrap {
+  margin-top:12px;
+  height:3px;
+  background:var(--border);
+  position:relative;
+  overflow:hidden;
+}
+
+.progress-bar-fill {
+  height:100%;
+  background: linear-gradient(90deg, var(--accent), var(--cyan));
+  width:0%;
+  transition:width 0.4s ease;
+}
+
+/* RESULTS AREA */
+.results-area {
+  max-width:1100px;
+  margin:60px auto;
+  padding:0 20px 40px;
+  display:none;
+}
+
+.results-area.active { display:block; animation:fadeUp 0.5s ease; }
+
+@keyframes fadeUp {
+  from{opacity:0;transform:translateY(24px);}
+  to{opacity:1;transform:translateY(0);}
+}
+
+.results-header {
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  margin-bottom:40px;
+  flex-wrap:wrap;
+  gap:20px;
+}
+
+.results-header h2 {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(36px,6vw,64px);
+  line-height:0.95;
+}
+.results-header h2 span { color:var(--accent); }
+
+.site-badge {
+  background:var(--panel);
+  border:1px solid var(--border);
+  padding:10px 16px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:11px;
+  color:var(--cyan);
+}
+
+/* THE CARD HAND */
+.card-game-area {
+  display:grid;
+  grid-template-columns: 340px 1fr;
+  gap:32px;
+  margin-bottom:50px;
+  align-items:start;
+}
+
+@media(max-width:800px){ .card-game-area { grid-template-columns:1fr; } }
+
+/* BLACK CARD */
+.black-card-wrap {
+  position:sticky;
+  top:24px;
+}
+
+.black-card {
+  background:var(--cream);
+  color:#0a0a0a;
+  padding:36px 32px 40px;
+  border-radius:3px;
+  box-shadow:var(--shadow-card);
+  position:relative;
+  transform:rotate(-1.5deg);
+  transition:transform 0.3s;
+}
+.black-card:hover { transform:rotate(0); }
+
+.bc-label {
+  font-family:'IBM Plex Mono',monospace;
+  font-size:9px;
+  letter-spacing:0.2em;
+  text-transform:uppercase;
+  color:#888;
+  margin-bottom:20px;
+  display:block;
+}
+
+.bc-text {
+  font-family:'Barlow',sans-serif;
+  font-size:21px;
+  font-weight:600;
+  line-height:1.4;
+  color:#0a0a0a;
+}
+
+.bc-blank {
+  display:inline-block;
+  border-bottom:3px solid #0a0a0a;
+  min-width:100px;
+}
+
+.bc-pick {
+  margin-top:28px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:10px;
+  color:#999;
+  letter-spacing:0.15em;
+}
+
+.bc-agent-note {
+  margin-top:20px;
+  padding-top:20px;
+  border-top:1px solid #ddd;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:10px;
+  color:#666;
+  line-height:1.6;
+}
+
+.bc-agent-note strong { color:var(--accent); font-style:normal; }
+
+/* WHITE CARDS GRID */
+.white-cards-grid {
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap:14px;
+}
+
+.white-card {
+  background:var(--cream);
+  color:#0a0a0a;
+  padding:18px 16px;
+  border-radius:3px;
+  font-family:'Barlow',sans-serif;
+  font-size:13px;
+  font-weight:500;
+  line-height:1.5;
+  cursor:pointer;
+  transition:all 0.15s;
+  box-shadow:4px 4px 0px rgba(0,0,0,0.8);
+  position:relative;
+  user-select:none;
+  border:2px solid transparent;
+  animation:cardFall 0.4s ease forwards;
+  opacity:0;
+}
+
+.white-card:nth-child(1){animation-delay:0.05s}
+.white-card:nth-child(2){animation-delay:0.1s}
+.white-card:nth-child(3){animation-delay:0.15s}
+.white-card:nth-child(4){animation-delay:0.2s}
+.white-card:nth-child(5){animation-delay:0.25s}
+.white-card:nth-child(6){animation-delay:0.3s}
+.white-card:nth-child(7){animation-delay:0.35s}
+
+@keyframes cardFall {
+  from{opacity:0;transform:translateY(-12px) rotate(2deg);}
+  to{opacity:1;transform:translateY(0) rotate(0deg);}
+}
+
+.white-card:hover {
+  transform:translateY(-3px);
+  box-shadow:6px 7px 0px rgba(0,0,0,0.9);
+  background:#fff;
+}
+
+.white-card.pain { border-left:3px solid var(--accent); }
+.white-card.agent { border-left:3px solid var(--cyan); }
+.white-card.selected {
+  background:#0a0a0a;
+  color:var(--cream);
+  border:2px solid var(--accent);
+  box-shadow:4px 4px 0px rgba(255,45,85,0.4);
+}
+.white-card.selected::after {
+  content:'✓';
+  position:absolute;
+  top:8px;right:10px;
+  color:var(--accent);font-size:12px;font-weight:700;
+}
+
+.card-type-tag {
+  font-family:'IBM Plex Mono',monospace;
+  font-size:9px;
+  letter-spacing:0.15em;
+  text-transform:uppercase;
+  margin-bottom:8px;
+  display:block;
+  opacity:0.5;
+}
+
+/* AGENT PICKS SECTION */
+.agent-picks-section {
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-left:3px solid var(--cyan);
+  padding:32px;
+  margin-bottom:40px;
+}
+
+.ap-header {
+  display:flex;
+  align-items:center;
+  gap:14px;
+  margin-bottom:24px;
+}
+
+.ap-avatar {
+  width:44px;
+  height:44px;
+  border-radius:50%;
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:'Bebas Neue',sans-serif;
+  font-size:18px;
+  color:white;
+  flex-shrink:0;
+}
+
+.ap-name {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:22px;
+  letter-spacing:0.05em;
+}
+
+.ap-role {
+  font-family:'IBM Plex Mono',monospace;
+  font-size:10px;
+  color:var(--muted);
+  letter-spacing:0.15em;
+}
+
+.ap-analysis {
+  font-family:'Barlow',sans-serif;
+  font-size:15px;
+  line-height:1.75;
+  color:var(--text);
+  margin-bottom:20px;
+}
+
+.ap-cta-strip {
+  background:#08080e;
+  border:1px solid var(--border);
+  padding:20px 24px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  flex-wrap:wrap;
+}
+
+.ap-cta-text {
+  font-family:'IBM Plex Mono',monospace;
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.6;
+}
+
+.ap-cta-text strong { color:var(--cyan); }
+
+.btn-upgrade {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:20px;
+  letter-spacing:0.1em;
+  background: linear-gradient(135deg, var(--accent), #ff6b35);
+  color:white;
+  border:none;
+  padding:14px 32px;
+  cursor:pointer;
+  white-space:nowrap;
+  clip-path:polygon(8px 0%,100% 0%,calc(100% - 8px) 100%,0% 100%);
+  transition:all 0.2s;
+}
+.btn-upgrade:hover { opacity:0.9; transform:translateY(-2px); }
+
+/* AFFILIATE LINK PANEL */
+.aff-panel {
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-top:3px solid var(--gold);
+  padding:28px 32px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  flex-wrap:wrap;
+  margin-bottom:40px;
+}
+
+.aff-label {
+  font-family:'IBM Plex Mono',monospace;
+  font-size:10px;
+  letter-spacing:0.2em;
+  color:var(--gold);
+  margin-bottom:8px;
+}
+
+.aff-link {
+  font-family:'IBM Plex Mono',monospace;
+  font-size:14px;
+  color:var(--cyan);
+  text-decoration:none;
+}
+
+.btn-copy-aff {
+  font-family:'IBM Plex Mono',monospace;
+  font-size:11px;
+  letter-spacing:0.1em;
+  background:transparent;
+  color:var(--gold);
+  border:1px solid var(--gold);
+  padding:10px 20px;
+  cursor:pointer;
+  transition:all 0.15s;
+}
+.btn-copy-aff:hover { background:var(--gold); color:var(--void); }
+
+/* UPGRADE MODAL */
+.modal-backdrop {
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.85);
+  z-index:500;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+.modal-backdrop.active { display:flex; }
+
+.modal {
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-top:3px solid var(--accent);
+  max-width:560px;
+  width:100%;
+  padding:48px 44px;
+  position:relative;
+  animation:modalIn 0.3s ease;
+}
+
+@keyframes modalIn {
+  from{opacity:0;transform:scale(0.95);}
+  to{opacity:1;transform:scale(1);}
+}
+
+.modal-close {
+  position:absolute;
+  top:16px;right:20px;
+  background:none;border:none;
+  color:var(--muted);font-size:20px;cursor:pointer;
+}
+.modal-close:hover { color:var(--text); }
+
+.modal h3 {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:48px;
+  line-height:0.95;
+  margin-bottom:12px;
+}
+.modal h3 span { color:var(--accent); }
+
+.modal-sub {
+  font-family:'IBM Plex Mono',monospace;
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.8;
+  margin-bottom:30px;
+}
+
+.perks-list {
+  list-style:none;
+  margin-bottom:32px;
+}
+
+.perks-list li {
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  padding:10px 0;
+  border-bottom:1px solid var(--border);
+  font-family:'Barlow',sans-serif;
+  font-size:14px;
+  color:var(--text);
+}
+
+.perk-icon {
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  background:rgba(0,255,136,0.15);
+  border:1px solid var(--green);
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;color:var(--green);
+  flex-shrink:0;margin-top:2px;
+}
+
+.price-row {
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+  margin-bottom:24px;
+}
+
+.price-amt {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:64px;
+  color:var(--text);
+  line-height:1;
+}
+
+.price-per {
+  font-family:'IBM Plex Mono',monospace;
+  font-size:12px;
+  color:var(--muted);
+}
+
+.modal-email-input {
+  width:100%;
+  background:#08080e;
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:14px 18px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:13px;
+  outline:none;
+  margin-bottom:12px;
+  transition:border-color 0.2s;
+}
+.modal-email-input:focus { border-color:var(--accent); }
+.modal-email-input::placeholder { color:#333; }
+
+.btn-pay {
+  width:100%;
+  font-family:'Bebas Neue',sans-serif;
+  font-size:24px;
+  letter-spacing:0.1em;
+  background: linear-gradient(135deg, var(--accent), #ff6b35);
+  color:white;
+  border:none;
+  padding:18px;
+  cursor:pointer;
+  transition:opacity 0.15s;
+}
+.btn-pay:hover { opacity:0.9; }
+
+.modal-fine {
+  text-align:center;
+  margin-top:14px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:10px;
+  color:#333;
+  letter-spacing:0.1em;
+}
+
+/* ROTATOR PEEK */
+.rotator-teaser {
+  background:var(--panel);
+  border:1px solid var(--border);
+  padding:32px;
+  text-align:center;
+  margin-bottom:80px;
+  position:relative;
+  overflow:hidden;
+}
+
+.rotator-teaser::before {
+  content:'';
+  position:absolute;
+  inset:0;
+  background: radial-gradient(ellipse at center, rgba(0,212,255,0.05) 0%, transparent 70%);
+}
+
+.rt-label {
+  font-family:'IBM Plex Mono',monospace;
+  font-size:10px;
+  letter-spacing:0.25em;
+  color:var(--cyan);
+  margin-bottom:16px;
+}
+
+.rt-agents {
+  display:flex;
+  justify-content:center;
+  gap:16px;
+  flex-wrap:wrap;
+  margin:20px 0;
+}
+
+.rt-agent {
+  background:#08080e;
+  border:1px solid var(--border);
+  padding:14px 20px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:11px;
+  color:var(--muted);
+  transition:all 0.2s;
+}
+
+.rt-agent.active {
+  border-color:var(--cyan);
+  color:var(--cyan);
+  background:rgba(0,212,255,0.05);
+}
+
+.rt-agent.yours {
+  border-color:var(--accent);
+  color:var(--accent);
+  background:rgba(255,45,85,0.05);
+}
+
+.rt-agent .agent-name { font-weight:700; display:block; margin-bottom:4px; }
+.rt-agent .agent-stat { font-size:9px; opacity:0.6; }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="agent-badge">
+    <div class="agent-dot"></div>
+    VESSEL PROTOCOL · AGENT SCANNER · LIVE
+  </div>
+  <h1>Your Website<br>Has <span class="highlight">Pain Points.</span><br>We Find Them.</h1>
+  <div class="hero-sub">Enter any URL. Our agents scan for friction, failure modes, and missed money. Then we show you exactly how AI agents fix it — in the format of Cards Against Humanity.</div>
+</div>
+
+<!-- SCANNER -->
+<div class="scanner-section">
+  <div class="scanner-box">
+    <div class="input-row">
+      <input type="text" class="url-input" id="urlInput" placeholder="https://yourbusiness.com" />
+      <button class="btn-scan" id="scanBtn" onclick="startScan()">SCAN →</button>
+    </div>
+    <div class="scanner-options">
+      <label class="option-chip"><input type="checkbox" id="optConversion" checked> Conversion leaks</label>
+      <label class="option-chip"><input type="checkbox" id="optAttention" checked> Attention gaps</label>
+      <label class="option-chip"><input type="checkbox" id="optRevenue" checked> Revenue opportunities</label>
+      <label class="option-chip"><input type="checkbox" id="optAgent"> Agent deployment</label>
+    </div>
+
+    <!-- PROGRESS -->
+    <div class="scan-progress" id="scanProgress">
+      <div class="progress-log" id="progressLog"></div>
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressBar"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- RESULTS -->
+<div class="results-area" id="resultsArea">
+
+  <div class="results-header">
+    <h2>We found<br><span>the holes</span><br>in your funnel.</h2>
+    <div class="site-badge" id="siteBadge">scanning...</div>
+  </div>
+
+  <!-- CARD GAME -->
+  <div class="card-game-area">
+    <div class="black-card-wrap">
+      <div class="black-card">
+        <span class="bc-label">■ YOUR BUSINESS</span>
+        <div class="bc-text" id="bcText">Loading...</div>
+        <div class="bc-pick">PICK THE CARDS THAT HIT HOME</div>
+        <div class="bc-agent-note" id="bcAgentNote">
+          Served by <strong id="agentName">Al Dente</strong> — Vessel Protocol Agent<br>
+          <span id="agentAffLink" style="color:#00d4ff;font-size:9px;text-decoration:none;">vessel.protocol/ref/aldente</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="white-cards-grid" id="whiteCardsGrid">
+      <!-- generated -->
+    </div>
+  </div>
+
+  <!-- AGENT ANALYSIS -->
+  <div class="agent-picks-section">
+    <div class="ap-header">
+      <div class="ap-avatar" id="apAvatar">AD</div>
+      <div>
+        <div class="ap-name" id="apName">Al Dente</div>
+        <div class="ap-role" id="apRole">VESSEL AGENT · FOOD & HOSPITALITY NICHE</div>
+      </div>
+    </div>
+    <div class="ap-analysis" id="apAnalysis">
+      <span style="color:#333">Analyzing your site...</span>
+    </div>
+    <div class="ap-cta-strip">
+      <div class="ap-cta-text">
+        <strong>$100/mo unlocks:</strong> Custom black cards for your brand · Rotator slot · Agent affiliate link · Dashboard access · Weekly AI analysis reports
+      </div>
+      <button class="btn-upgrade" onclick="openModal()">Upgrade → $100/mo</button>
+    </div>
+  </div>
+
+  <!-- AFFILIATE TEASER -->
+  <div class="aff-panel">
+    <div>
+      <div class="aff-label">YOUR AGENT AFFILIATE LINK</div>
+      <a class="aff-link" id="affLinkDisplay">vessel.protocol/ref/[your-agent]</a>
+    </div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);max-width:280px;line-height:1.7;">
+      Every signup through your link earns you revenue <em>and</em> rotator priority. Upgrade to activate.
+    </div>
+    <button class="btn-copy-aff" onclick="openModal()">Activate Link →</button>
+  </div>
+
+  <!-- ROTATOR TEASER -->
+  <div class="rotator-teaser">
+    <div class="rt-label">LIVE AGENT ROTATOR — CARDS FOR HUMANITY MODULE</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;margin-bottom:8px;">50 Slots. Daily Rotation.</div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);margin-bottom:20px;">Each slot holder's agent serves cards + affiliate links to every visitor. You earn when they convert.</div>
+    <div class="rt-agents" id="rotatorSlots"></div>
+    <div style="margin-top:20px">
+      <button class="btn-upgrade" onclick="openModal()" style="font-size:18px;padding:12px 40px;">Claim Your Rotator Slot →</button>
+    </div>
+  </div>
+</div>
+
+<!-- UPGRADE MODAL -->
+<div class="modal-backdrop" id="upgradeModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent);letter-spacing:0.2em;margin-bottom:16px;">VESSEL PROTOCOL · PRO TIER</div>
+    <h3>Own Your<br><span>Agent Slot.</span></h3>
+    <div class="modal-sub">One flat price. No hidden fees. Includes rotator seat, affiliate link activation, custom card dashboard, and weekly AI site scans.</div>
+
+    <ul class="perks-list">
+      <li><div class="perk-icon">✓</div> Rotator seat — your agent serves cards to every visitor</li>
+      <li><div class="perk-icon">✓</div> Custom black card editor — brand your questions</li>
+      <li><div class="perk-icon">✓</div> Affiliate link with real-time conversion tracking</li>
+      <li><div class="perk-icon">✓</div> Unlimited website scans (yours + clients)</li>
+      <li><div class="perk-icon">✓</div> Weekly AI analysis report emailed to you</li>
+      <li><div class="perk-icon">✓</div> Access to full dashboard + leaderboard</li>
+      <li><div class="perk-icon">✓</div> 20% revenue share on referral conversions</li>
+    </ul>
+
+    <div class="price-row">
+      <div class="price-amt">$100</div>
+      <div class="price-per">/ month<br>cancel anytime</div>
+    </div>
+
+    <input type="email" class="modal-email-input" placeholder="your@email.com" id="modalEmail">
+    <button class="btn-pay" onclick="handleUpgrade()">Start For $100/mo →</button>
+    <div class="modal-fine">NO SETUP FEES · INSTANT ACCESS · CANCEL ANYTIME</div>
+  </div>
+</div>
+
+<script>
+// ===== AGENT ROSTER (rotator) =====
+const AGENTS = [
+  { name:'Al Dente', init:'AD', niche:'Food & Hospitality', ref:'aldente', color:'#ff2d55' },
+  { name:'Lola', init:'LO', niche:'Fashion & Lifestyle', ref:'lola', color:'#c44dff' },
+  { name:'Maven', init:'MV', niche:'SaaS & Productized', ref:'maven', color:'#00d4ff' },
+  { name:'Hustle', init:'HU', niche:'Solopreneur & Creator', ref:'hustle', color:'#f5a623' },
+  { name:'Elvis CMO', init:'EL', niche:'Marketing & Funnels', ref:'elvis', color:'#00ff88' },
+];
+
+// Current serving agent (rotator picks one per session)
+const servingAgent = AGENTS[Math.floor(Math.random() * AGENTS.length)];
+
+// ===== CARD TEMPLATES =====
+const PAIN_CARD_TEMPLATES = [
+  { text:"Nobody can tell what _______ actually does from the homepage.", type:"pain" },
+  { text:"The CTA says 'Learn More' when it should say _______.", type:"pain" },
+  { text:"There are 47 distractions between the visitor and _______.", type:"pain" },
+  { text:"The pricing page makes _______ feel like a hostage negotiation.", type:"pain" },
+  { text:"The only thing working harder than the founder is _______.", type:"pain" },
+  { text:"Customers are leaving because nobody fixed _______.", type:"pain" },
+];
+
+const AGENT_SOLUTION_TEMPLATES = [
+  { text:"An AI agent that handles _______ 24/7 so you never miss a lead.", type:"agent" },
+  { text:"A rotator-powered agent that serves _______ to every visitor on autopilot.", type:"agent" },
+  { text:"Automated USDC distributions triggered every time _______ happens.", type:"agent" },
+  { text:"A Vessel Protocol slot that turns _______ into recurring affiliate income.", type:"agent" },
+  { text:"An agent with its own wallet, personality, and _______ built in.", type:"agent" },
+  { text:"On-chain attribution so you actually know which _______ converted.", type:"agent" },
+  { text:"A white-label agent that runs _______ for your clients while you sleep.", type:"agent" },
+];
+
+// ===== SCAN SIMULATION + AI CALL =====
+let scanComplete = false;
+
+async function startScan() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) { flashInput(); return; }
+
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true;
+  btn.textContent = 'SCANNING...';
+
+  // Show progress
+  document.getElementById('scanProgress').classList.add('active');
+  await runProgressLog(url);
+
+  // Set up agent
+  setupAgent();
+
+  // Show results shell
+  document.getElementById('resultsArea').classList.add('active');
+  document.getElementById('siteBadge').textContent = url.replace('https://','').replace('http://','').split('/')[0];
+
+  // Generate cards from AI
+  await generateCardsFromSite(url);
+
+  btn.disabled = false;
+  btn.textContent = 'RESCAN →';
+}
+
+function flashInput() {
+  const inp = document.getElementById('urlInput');
+  inp.style.borderColor = 'var(--accent)';
+  inp.placeholder = 'Enter a URL first...';
+  setTimeout(()=>{ inp.style.borderColor=''; inp.placeholder='https://yourbusiness.com'; }, 1500);
+}
+
+function setupAgent() {
+  // Set serving agent UI
+  document.getElementById('agentName').textContent = servingAgent.name;
+  document.getElementById('agentAffLink').textContent = `vessel.protocol/ref/${servingAgent.ref}`;
+  document.getElementById('apAvatar').textContent = servingAgent.init;
+  document.getElementById('apAvatar').style.background = `linear-gradient(135deg, ${servingAgent.color}, #1a1a2e)`;
+  document.getElementById('apName').textContent = servingAgent.name;
+  document.getElementById('apRole').textContent = `VESSEL AGENT · ${servingAgent.niche.toUpperCase()} NICHE`;
+  document.getElementById('affLinkDisplay').textContent = `vessel.protocol/ref/${servingAgent.ref}`;
+
+  // Build rotator slots
+  const slotEl = document.getElementById('rotatorSlots');
+  slotEl.innerHTML = '';
+  AGENTS.forEach((a, i) => {
+    const d = document.createElement('div');
+    d.className = 'rt-agent' + (a.ref === servingAgent.ref ? ' yours' : (i < 3 ? ' active' : ''));
+    d.innerHTML = `<span class="agent-name" style="color:${a.ref===servingAgent.ref?'var(--accent)':a.color}">${a.name}</span><span class="agent-stat">${a.niche}</span>`;
+    slotEl.appendChild(d);
+  });
+  // Add empty slots
+  for(let i=0;i<3;i++){
+    const d=document.createElement('div');
+    d.className='rt-agent';
+    d.innerHTML='<span class="agent-name" style="opacity:0.3">[ OPEN ]</span><span class="agent-stat">$100/mo</span>';
+    slotEl.appendChild(d);
+  }
+}
+
+const LOG_STEPS = [
+  ['Fetching domain metadata...', 'ok'],
+  ['Parsing page structure + headings...', 'ok'],
+  ['Scanning CTA patterns...', 'ok'],
+  ['Identifying conversion friction...', 'warn'],
+  ['Detecting revenue leaks...', 'warn'],
+  ['Running agent opportunity analysis...', 'ok'],
+  ['Generating card deck...', 'ok'],
+];
+
+async function runProgressLog(url) {
+  const log = document.getElementById('progressLog');
+  const bar = document.getElementById('progressBar');
+  log.innerHTML = '';
+
+  for(let i=0;i<LOG_STEPS.length;i++){
+    await sleep(350);
+    const [msg, type] = LOG_STEPS[i];
+    const now = new Date();
+    const ts = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+    const prefix = type==='ok' ? '▸' : '⚠';
+    const line = document.createElement('span');
+    line.className = `log-line`;
+    line.style.animationDelay = '0s';
+    line.innerHTML = `<span class="ts">${ts}</span><span class="${type}">${prefix}</span> ${msg}`;
+    log.appendChild(line);
+    bar.style.width = `${((i+1)/LOG_STEPS.length)*100}%`;
+    log.scrollTop = log.scrollHeight;
+  }
+  await sleep(400);
+}
+
+async function generateCardsFromSite(url) {
+  const domain = url.replace('https://','').replace('http://','').split('/')[0];
+
+  const prompt = `You are a brutally honest business analyst and the IdeaRalph concept engine for the Vessel Protocol.
+
+A user submitted this URL for scanning: ${url}
+
+Generate a JSON response with this exact structure (no markdown, pure JSON):
+{
+  "blackCard": "A single Cards Against Humanity style black card sentence with ONE blank (use _______) that captures the core business challenge this type of site faces. Make it punchy, a little dark, honest.",
+  "painCards": [
+    "Pain point white card 1 (10-15 words max, specific, no fluff)",
+    "Pain point white card 2",
+    "Pain point white card 3",
+    "Pain point white card 4"
+  ],
+  "agentCards": [
+    "AI agent solution card 1 (how Vessel Protocol agents specifically solve one of the pain points)",
+    "AI agent solution card 2",
+    "AI agent solution card 3"
+  ],
+  "agentAnalysis": "A 3-sentence punchy analysis from ${servingAgent.name} (${servingAgent.niche} agent). Identify what this site is leaving on the table, what an AI agent would fix immediately, and end with a specific Vessel Protocol value prop. First person voice, direct, no hype words."
+}
+
+Make pain cards feel like someone finally said the quiet part out loud. Agent solution cards should feel like obvious fixes the site owner wishes they'd thought of.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        messages:[{role:'user',content:prompt}]
+      })
+    });
+
+    const data = await res.json();
+    const raw = data.content?.map(b=>b.text||'').join('') || '';
+
+    let parsed;
+    try {
+      const clean = raw.replace(/```json|```/g,'').trim();
+      parsed = JSON.parse(clean);
+    } catch(e) {
+      parsed = getFallbackCards(domain);
+    }
+
+    renderCards(parsed);
+
+  } catch(e) {
+    renderCards(getFallbackCards(domain));
+  }
+}
+
+function renderCards(data) {
+  // Black card
+  document.getElementById('bcText').innerHTML = data.blackCard.replace('_______','<span class="bc-blank">_______</span>');
+
+  // White cards
+  const grid = document.getElementById('whiteCardsGrid');
+  grid.innerHTML = '';
+
+  data.painCards.forEach((text, i) => {
+    const card = createWhiteCard(text, 'pain', `PAIN POINT ${i+1}`);
+    grid.appendChild(card);
+  });
+
+  data.agentCards.forEach((text, i) => {
+    const card = createWhiteCard(text, 'agent', `AGENT FIX ${i+1}`);
+    grid.appendChild(card);
+  });
+
+  // Agent analysis
+  typeIn(document.getElementById('apAnalysis'), data.agentAnalysis);
+}
+
+function createWhiteCard(text, type, label) {
+  const div = document.createElement('div');
+  div.className = `white-card ${type}`;
+  div.innerHTML = `<span class="card-type-tag">${label}</span>${text}`;
+  div.onclick = () => div.classList.toggle('selected');
+  return div;
+}
+
+function typeIn(el, text) {
+  el.innerHTML = '';
+  let i = 0;
+  const iv = setInterval(()=>{
+    if(i < text.length){ el.innerHTML += text[i]; i++; }
+    else clearInterval(iv);
+  }, 16);
+}
+
+function getFallbackCards(domain) {
+  return {
+    blackCard: `${domain} is losing customers because nobody solved _______ before launching.`,
+    painCards:[
+      "The homepage explains the product to nobody in particular.",
+      "There's no follow-up system after the first visit.",
+      "The pricing creates confusion instead of urgency.",
+      "The best testimonial is buried at the bottom of a page nobody visits.",
+    ],
+    agentCards:[
+      "An agent that personalizes the CTA based on traffic source in real time.",
+      "A rotator-powered follow-up sequence that runs on-chain without a VA.",
+      "Daily USDC distributions triggered by every qualified lead captured.",
+    ],
+    agentAnalysis: `${domain} has the bones of a real business but is leaking at every seam. A Vessel Protocol agent running a custom card scanner here would capture intent before it evaporates — and turn every visitor into a trackable affiliate event. The rotator slot means your agent works this funnel 24/7 while you focus on building.`
+  };
+}
+
+// ===== MODAL =====
+function openModal() { document.getElementById('upgradeModal').classList.add('active'); }
+function closeModal() { document.getElementById('upgradeModal').classList.remove('active'); }
+
+function handleUpgrade() {
+  const email = document.getElementById('modalEmail').value;
+  if(!email || !email.includes('@')) {
+    document.getElementById('modalEmail').style.borderColor='var(--accent)';
+    return;
+  }
+  // In production: fire to Stripe / payment processor
+  alert(`🔥 Activating your slot!\n\nEmail: ${email}\nAgent: ${servingAgent.name}\nRef: vessel.protocol/ref/${servingAgent.ref}\n\n[In production: redirect to Stripe checkout]`);
+}
+
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+// Close modal on backdrop click
+document.getElementById('upgradeModal').addEventListener('click', e=>{
+  if(e.target===e.currentTarget) closeModal();
+});
+</script>
+</body>
+</html>

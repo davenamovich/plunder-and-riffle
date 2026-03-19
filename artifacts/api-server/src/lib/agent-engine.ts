@@ -168,25 +168,41 @@ async function generateViralHook(
 
 // ─── NFT earn check ───────────────────────────────────────────────────────────
 
+async function getNFTThresholds(): Promise<{ referral: number; viral: number }> {
+  try {
+    const ralph = await db.select({
+      nftReferralThreshold: agentsTable.nftReferralThreshold,
+      nftViralThreshold: agentsTable.nftViralThreshold,
+    }).from(agentsTable).where(eq(agentsTable.slug, "ralph")).limit(1).then(r => r[0]);
+    return {
+      referral: ralph?.nftReferralThreshold ?? NFT_REFERRAL_THRESHOLD,
+      viral:    ralph?.nftViralThreshold    ?? NFT_VIRAL_THRESHOLD,
+    };
+  } catch {
+    return { referral: NFT_REFERRAL_THRESHOLD, viral: NFT_VIRAL_THRESHOLD };
+  }
+}
+
 async function checkAndMarkNftEarned(userId: string): Promise<void> {
-  const user = await db.select({
-    id: usersTable.id,
-    nftEarned: usersTable.nftEarned,
-    viralPostCount: usersTable.viralPostCount,
-    referredById: usersTable.referredById,
-  }).from(usersTable).where(eq(usersTable.id, userId)).limit(1).then(r => r[0]);
+  const [user, thresholds] = await Promise.all([
+    db.select({
+      id: usersTable.id,
+      nftEarned: usersTable.nftEarned,
+      viralPostCount: usersTable.viralPostCount,
+    }).from(usersTable).where(eq(usersTable.id, userId)).limit(1).then(r => r[0]),
+    getNFTThresholds(),
+  ]);
 
   if (!user || user.nftEarned) return;
 
   // Count referrals this user has made
   const referralRows = await db.select({ id: usersTable.id })
-    .from(usersTable)
-    .where(eq(usersTable.referredById, userId));
+    .from(usersTable).where(eq(usersTable.referredById, userId));
 
   const referralCount = referralRows.length;
   const viralCount = user.viralPostCount;
 
-  const earned = referralCount >= NFT_REFERRAL_THRESHOLD || viralCount >= NFT_VIRAL_THRESHOLD;
+  const earned = referralCount >= thresholds.referral || viralCount >= thresholds.viral;
   if (earned) {
     await db.update(usersTable).set({
       nftEarned: true,

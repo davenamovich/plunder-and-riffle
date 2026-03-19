@@ -47,6 +47,9 @@ export const agentsTable = pgTable("agents", {
   cdpWalletNetwork: text("cdp_wallet_network").default("base-mainnet"),
   cdpWalletSeed: text("cdp_wallet_seed"),      // encrypted seed export for wallet recovery
   cdpWalletCreatedAt: timestamp("cdp_wallet_created_at"),
+  // NFT earn thresholds (platform-wide, set on ralph agent)
+  nftReferralThreshold: integer("nft_referral_threshold").notNull().default(3),
+  nftViralThreshold: integer("nft_viral_threshold").notNull().default(3),
   // Agent Engine
   engineEnabled: boolean("engine_enabled").notNull().default(false),
   enginePublic: boolean("engine_public").notNull().default(false),

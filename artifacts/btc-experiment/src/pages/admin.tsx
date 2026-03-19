@@ -1085,6 +1085,33 @@ export default function Admin() {
                 </div>
               </div>
 
+              {/* NFT Thresholds */}
+              <div className="border border-amber-500/20 bg-amber-500/5 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Gem className="w-4 h-4 text-amber-400" />
+                  <p className="text-sm font-medium">NFT Earn Thresholds</p>
+                  <p className="text-xs text-muted-foreground">— either condition unlocks the badge</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Referrals needed</label>
+                    <Input
+                      type="number" min={1} max={100}
+                      value={localSettings.nftReferralThreshold ?? 3}
+                      onChange={e => setLocalSettings({ ...localSettings, nftReferralThreshold: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Viral hooks needed</label>
+                    <Input
+                      type="number" min={1} max={100}
+                      value={localSettings.nftViralThreshold ?? 3}
+                      onChange={e => setLocalSettings({ ...localSettings, nftViralThreshold: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="border-t border-border/40 pt-5 space-y-4">
                 {/* Lead Approval Mode Toggle */}
                 <div className="flex items-center justify-between p-4 rounded-xl border border-border/40 bg-card/50">
@@ -1126,7 +1153,7 @@ export default function Admin() {
                 </div>
               </div>
 
-              <Button className="w-full" onClick={() => updateSettings({ data: { ...localSettings, freeSlotCapacity: Number(localSettings.freeSlotCapacity), paidSlotCapacity: Number(localSettings.paidSlotCapacity), dailyCap: Number(localSettings.dailyCap), slotDurationHours: Number(localSettings.slotDurationHours) } })} disabled={isSavingSettings}>
+              <Button className="w-full" onClick={() => updateSettings({ data: { ...localSettings, freeSlotCapacity: Number(localSettings.freeSlotCapacity), paidSlotCapacity: Number(localSettings.paidSlotCapacity), dailyCap: Number(localSettings.dailyCap), slotDurationHours: Number(localSettings.slotDurationHours), nftReferralThreshold: Number(localSettings.nftReferralThreshold ?? 3), nftViralThreshold: Number(localSettings.nftViralThreshold ?? 3) } })} disabled={isSavingSettings}>
                 {isSavingSettings ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : null}
                 Save All Settings
               </Button>
