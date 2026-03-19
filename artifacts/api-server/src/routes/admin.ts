@@ -795,12 +795,12 @@ router.post("/admin/agents/provision-all-wallets", requireAdmin, async (req, res
     // Background loop — queue serializes all creation calls with a 70s cool-down
     for (const agent of needsWallet) {
       try {
-        const wallet = await createAgentWallet("base-mainnet", agent.slug);
+        const wallet = await createAgentWallet("base-mainnet", agent.name, agent.slug);
         await db.update(agentsTable).set({
           cdpWalletId: wallet.walletId,
           cdpWalletAddress: wallet.address,
           cdpWalletNetwork: wallet.network,
-          cdpWalletSeed: wallet.seed ?? null,
+          cdpWalletSeed: null,
           cdpWalletCreatedAt: new Date(),
           updatedAt: new Date(),
         }).where(eq(agentsTable.id, agent.id));
@@ -831,13 +831,13 @@ router.post("/admin/agents/:id/create-wallet", requireAdmin, async (req, res) =>
     }
 
     console.log(`[cdp] manual wallet creation for agent ${agent.slug} (${agent.id})`);
-    const wallet = await createAgentWallet("base-mainnet", `${agent.name} [${agent.slug}]`);
+    const wallet = await createAgentWallet("base-mainnet", agent.name, agent.slug);
 
     await db.update(agentsTable).set({
       cdpWalletId: wallet.walletId,
       cdpWalletAddress: wallet.address,
       cdpWalletNetwork: wallet.network,
-      cdpWalletSeed: wallet.seed ?? null,
+      cdpWalletSeed: null,
       cdpWalletCreatedAt: new Date(),
       updatedAt: new Date(),
     }).where(eq(agentsTable.id, agent.id));
@@ -1087,13 +1087,13 @@ router.post("/admin/agents/:id/cdp-wallet", requireAdmin, async (req, res) => {
 
     const network = (req.body?.network as string) || "base-mainnet";
     console.log(`[cdp] creating wallet for agent ${agent.slug} on ${network}…`);
-    const wallet = await createAgentWallet(network);
+    const wallet = await createAgentWallet(network, agent.name, agent.slug);
 
     const [updated] = await db.update(agentsTable).set({
       cdpWalletId: wallet.walletId,
       cdpWalletAddress: wallet.address,
       cdpWalletNetwork: wallet.network,
-      cdpWalletSeed: wallet.seed,
+      cdpWalletSeed: null,
       cdpWalletCreatedAt: new Date(),
       updatedAt: new Date(),
     }).where(eq(agentsTable.id, req.params.id)).returning();
@@ -1140,10 +1140,10 @@ router.get("/admin/agent-wallets", requireAdmin, async (_req, res) => {
       cdpWalletCreatedAt: agentsTable.cdpWalletCreatedAt,
     }).from(agentsTable).where(eq(agentsTable.isActive, true));
 
-    const walleted = agents.filter(a => a.cdpWalletId && a.cdpWalletSeed);
+    const walleted = agents.filter(a => a.cdpWalletId && a.cdpWalletAddress);
 
     const walletData = await Promise.all(walleted.map(async (agent) => {
-      const balances = await getWalletBalances(agent.cdpWalletSeed!);
+      const balances = await getWalletBalances(agent.cdpWalletAddress!);
       return {
         agentId: agent.id,
         agentName: agent.name,
@@ -1187,13 +1187,13 @@ router.post("/admin/agent-wallets/sweep", requireAdmin, async (req, res) => {
     const targets = (agentIds?.length
       ? agents.filter(a => agentIds.includes(a.id))
       : agents
-    ).filter(a => a.cdpWalletSeed);
+    ).filter(a => a.cdpWalletAddress);
 
     console.log(`[cdp-sweep] initiated by admin — ${targets.length} wallets → ${toAddress}`);
 
     const results = await Promise.all(targets.map(async (agent) => {
       try {
-        const { transfers } = await sweepWallet(agent.cdpWalletSeed!, toAddress, assets ?? ["eth", "usdc"]);
+        const { transfers } = await sweepWallet(agent.cdpWalletAddress!, toAddress, assets ?? ["usdc"]);
         return { agentId: agent.id, agentSlug: agent.slug, address: agent.cdpWalletAddress, transfers, ok: true };
       } catch (err: any) {
         return { agentId: agent.id, agentSlug: agent.slug, address: agent.cdpWalletAddress, transfers: [], ok: false, error: err?.message };
@@ -1241,8 +1241,8 @@ router.get("/admin/agents/:id/metrics", requireAdmin, async (req, res) => {
 
     // Wallet balance (if available)
     let walletBalances: any[] = [];
-    if (agent.cdpWalletSeed) {
-      walletBalances = await getWalletBalances(agent.cdpWalletSeed);
+    if (agent.cdpWalletAddress) {
+      walletBalances = await getWalletBalances(agent.cdpWalletAddress);
     }
 
     // Referral signups via this agent's rotator links

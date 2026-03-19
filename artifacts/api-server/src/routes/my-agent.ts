@@ -222,6 +222,7 @@ router.post("/my-agent/composio/connect", requireAuth, async (req, res) => {
 router.get("/agents", async (req, res) => {
   try {
     const now = new Date();
+    const { calculateCurrentPrice } = await import("../lib/pricing.js");
     const agents = await db.select().from(agentsTable).where(eq(agentsTable.isActive, true));
 
     const enriched = await Promise.all(agents.map(async (agent) => {
@@ -239,14 +240,40 @@ router.get("/agents", async (req, res) => {
 
       const freeAvailable = Math.max(0, agent.freeSlotCapacity - freeSlots);
 
+      const pricing = calculateCurrentPrice({
+        paidSlotPrice:      agent.paidSlotPrice,
+        pricingMode:        agent.pricingMode,
+        minPriceUsd:        agent.minPriceUsd,
+        maxPriceUsd:        agent.maxPriceUsd,
+        surgeFactor:        agent.surgeFactor,
+        flashSaleEnabled:   agent.flashSaleEnabled,
+        flashSalePrice:     agent.flashSalePrice,
+        flashSaleLabel:     agent.flashSaleLabel,
+        flashSaleEndsAt:    agent.flashSaleEndsAt,
+        flashSaleSeatsTotal: agent.flashSaleSeatsTotal,
+        flashSaleSeatsSold: agent.flashSaleSeatsSold,
+        activePaidSlots:    paidSlots,
+        paidSlotCapacity:   agent.paidSlotCapacity,
+      });
+
       return {
         id: agent.id, slug: agent.slug, name: agent.name,
-        description: agent.description, isPaused: agent.isPaused,
+        description: agent.description, avatarUrl: agent.avatarUrl ?? null,
+        isPaused: agent.isPaused,
         freeSlotCapacity: agent.freeSlotCapacity, paidSlotCapacity: agent.paidSlotCapacity,
         activeFreeSlots: freeSlots, activePaidSlots: paidSlots,
         freeAvailable, totalClicks: agent.totalClicks, totalSignups: agent.totalSignups,
         dailyLeadCount: agent.dailyLeadCount, paidSlotPrice: agent.paidSlotPrice,
         slotDurationHours: agent.slotDurationHours,
+        // Dynamic pricing
+        currentPrice:           pricing.currentPrice,
+        pricingMode:            pricing.mode,
+        flashSaleActive:        pricing.flashSaleActive,
+        flashSaleLabel:         pricing.flashSaleLabel,
+        flashSaleEndsAt:        pricing.flashSaleEndsAt,
+        flashSaleSeatsRemaining: pricing.flashSaleSeatsRemaining,
+        surgeMultiplier:        pricing.surgeMultiplier,
+        occupancyRate:          pricing.occupancyRate,
       };
     }));
 

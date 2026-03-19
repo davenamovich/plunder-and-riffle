@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import {
-  Bot, Zap, Users, BarChart2, Clock, ArrowRight, Lock, CheckCircle, Split
+  Bot, Zap, Users, BarChart2, Clock, ArrowRight, Lock, CheckCircle, Split,
+  TrendingUp, Flame, Timer,
 } from "lucide-react";
 
 interface AgentCard {
@@ -16,6 +17,7 @@ interface AgentCard {
   slug: string;
   name: string;
   description: string | null;
+  avatarUrl: string | null;
   isPaused: boolean;
   freeSlotCapacity: number;
   paidSlotCapacity: number;
@@ -27,6 +29,15 @@ interface AgentCard {
   dailyLeadCount: number;
   paidSlotPrice: number;
   slotDurationHours: number;
+  // Dynamic pricing
+  currentPrice: number;
+  pricingMode: "fixed" | "dynamic" | "flash_sale";
+  flashSaleActive: boolean;
+  flashSaleLabel: string | null;
+  flashSaleEndsAt: string | null;
+  flashSaleSeatsRemaining: number | null;
+  surgeMultiplier: number | null;
+  occupancyRate: number;
 }
 
 function useAgentDirectory() {
@@ -39,8 +50,74 @@ function useAgentDirectory() {
 
 function AgentStatusBadge({ agent }: { agent: AgentCard }) {
   if (agent.isPaused) return <Badge variant="secondary">Paused</Badge>;
-  if (agent.freeAvailable > 0) return <Badge className="bg-green-500/15 text-green-400 border-green-500/30 border">Free Slots Open</Badge>;
+  if (agent.flashSaleActive) return (
+    <Badge className="bg-red-500/20 text-red-400 border-red-500/30 border animate-pulse">
+      <Flame className="h-3 w-3 mr-1" />
+      {agent.flashSaleLabel ?? "Flash Sale"}
+    </Badge>
+  );
+  if (agent.freeAvailable > 0) return (
+    <Badge className="bg-green-500/15 text-green-400 border-green-500/30 border">Free Slots Open</Badge>
+  );
   return <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 border">Paid Only</Badge>;
+}
+
+function PricingBadge({ agent }: { agent: AgentCard }) {
+  if (agent.flashSaleActive) {
+    return (
+      <span className="text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 rounded px-1.5 py-0.5 flex items-center gap-1">
+        <Flame className="h-3 w-3" />
+        ${agent.currentPrice.toFixed(2)}
+        <span className="text-muted-foreground line-through ml-1">${agent.paidSlotPrice.toFixed(2)}</span>
+      </span>
+    );
+  }
+  if (agent.pricingMode === "dynamic" && agent.surgeMultiplier && agent.surgeMultiplier > 1.05) {
+    return (
+      <span className="text-xs font-semibold text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded px-1.5 py-0.5 flex items-center gap-1">
+        <TrendingUp className="h-3 w-3" />
+        ${agent.currentPrice.toFixed(2)}
+        <span className="text-muted-foreground text-[10px]">{Math.round(agent.occupancyRate * 100)}% full</span>
+      </span>
+    );
+  }
+  return null;
+}
+
+function FlashSaleCountdown({ endsAt, seatsRemaining }: { endsAt: string | null; seatsRemaining: number | null }) {
+  const [timeLeft, setTimeLeft] = React.useState<string>("");
+
+  React.useEffect(() => {
+    if (!endsAt) return;
+    const target = new Date(endsAt).getTime();
+    const update = () => {
+      const diff = target - Date.now();
+      if (diff <= 0) { setTimeLeft("Ended"); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setTimeLeft(`${h}h ${m}m ${s}s`);
+    };
+    update();
+    const iv = setInterval(update, 1000);
+    return () => clearInterval(iv);
+  }, [endsAt]);
+
+  if (!endsAt && seatsRemaining == null) return null;
+
+  return (
+    <div className="flex items-center justify-between text-xs rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2">
+      {endsAt && (
+        <span className="flex items-center gap-1 text-red-400">
+          <Timer className="h-3 w-3" />
+          {timeLeft}
+        </span>
+      )}
+      {seatsRemaining != null && (
+        <span className="text-red-300 font-semibold">{seatsRemaining} seats left</span>
+      )}
+    </div>
+  );
 }
 
 function SlotBar({ label, used, capacity, color }: { label: string; used: number; capacity: number; color: string }) {
@@ -108,9 +185,17 @@ export default function AgentsPage() {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                          <Bot className="h-5 w-5 text-primary" />
-                        </div>
+                        {agent.avatarUrl ? (
+                          <img
+                            src={agent.avatarUrl}
+                            alt={agent.name}
+                            className="w-10 h-10 rounded-xl object-cover border border-border/40"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                            <Bot className="h-5 w-5 text-primary" />
+                          </div>
+                        )}
                         <div>
                           <CardTitle className="text-lg">{agent.name}</CardTitle>
                           <p className="text-xs text-muted-foreground font-mono">/{agent.slug}</p>
@@ -126,6 +211,14 @@ export default function AgentsPage() {
                   </CardHeader>
 
                   <CardContent className="flex-1 flex flex-col gap-4">
+                    {/* Flash sale countdown */}
+                    {agent.flashSaleActive && (
+                      <FlashSaleCountdown
+                        endsAt={agent.flashSaleEndsAt}
+                        seatsRemaining={agent.flashSaleSeatsRemaining}
+                      />
+                    )}
+
                     {/* Slot bars */}
                     <div className="space-y-2">
                       <SlotBar
@@ -135,7 +228,7 @@ export default function AgentsPage() {
                         color="bg-primary"
                       />
                       <SlotBar
-                        label={`Paid slots ($${agent.paidSlotPrice}/slot)`}
+                        label={`Paid slots`}
                         used={agent.activePaidSlots}
                         capacity={agent.paidSlotCapacity}
                         color="bg-amber-500"
@@ -173,11 +266,14 @@ export default function AgentsPage() {
                     </ul>
 
                     {/* Paid seat split info */}
-                    {agent.paidSlotPrice > 0 && (
+                    {agent.currentPrice > 0 && (
                       <div className="rounded-xl border border-border/40 bg-muted/10 p-3 mt-1">
-                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold mb-2 flex items-center gap-1.5">
-                          <Split className="h-3 w-3" /> Paid seat revenue split
-                        </p>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                            <Split className="h-3 w-3" /> Paid seat revenue split
+                          </p>
+                          <PricingBadge agent={agent} />
+                        </div>
                         <div className="grid grid-cols-4 gap-1 text-center">
                           {[
                             { label: "Referrer", color: "text-primary" },
@@ -202,11 +298,16 @@ export default function AgentsPage() {
                         </Button>
                       ) : (
                         <Link href={`/icp?role=BusinessOwner&agent=${agent.slug}`}>
-                          <Button className="w-full" size="lg">
+                          <Button
+                            className={`w-full ${agent.flashSaleActive ? "bg-red-600 hover:bg-red-700" : ""}`}
+                            size="lg"
+                          >
                             <Zap className="h-4 w-4 mr-2" />
                             {agent.freeAvailable > 0
                               ? `Get Free Slot · ${agent.freeAvailable} left`
-                              : `Join Agent · $${agent.paidSlotPrice}`}
+                              : agent.flashSaleActive
+                                ? `Flash Sale · $${agent.currentPrice.toFixed(2)}`
+                                : `Join Agent · $${agent.currentPrice.toFixed(2)}`}
                             <ArrowRight className="h-4 w-4 ml-2" />
                           </Button>
                         </Link>

@@ -110,12 +110,12 @@ async function provisionNextMissingWallet() {
     if (!agent) return; // all agents have wallets
 
     console.log(`[cdp-worker] provisioning wallet for agent "${agent.slug}"…`);
-    const wallet = await createAgentWallet("base-mainnet", agent.name);
+    const wallet = await createAgentWallet("base-mainnet", agent.name, agent.slug);
     await db.update(agentsTable).set({
       cdpWalletId: wallet.walletId,
       cdpWalletAddress: wallet.address,
       cdpWalletNetwork: wallet.network,
-      cdpWalletSeed: wallet.seed ?? null,
+      cdpWalletSeed: null,
       cdpWalletCreatedAt: new Date(),
       updatedAt: new Date(),
     }).where(eq(agentsTable.id, agent.id));
@@ -143,16 +143,15 @@ async function botOpsSweepJob() {
 
   const agents = await db.select({
     id: agentsTable.id, slug: agentsTable.slug,
-    cdpWalletSeed: agentsTable.cdpWalletSeed,
     cdpWalletAddress: agentsTable.cdpWalletAddress,
     botOpsSweepThresholdUsd: agentsTable.botOpsSweepThresholdUsd,
-  }).from(agentsTable).where(and(isNotNull(agentsTable.cdpWalletSeed), isNotNull(agentsTable.cdpWalletAddress)));
+  }).from(agentsTable).where(isNotNull(agentsTable.cdpWalletAddress));
 
   let swept = 0;
   for (const agent of agents) {
-    if (!agent.cdpWalletSeed || !agent.cdpWalletAddress) continue;
+    if (!agent.cdpWalletAddress) continue;
     try {
-      const { transfers } = await sweepWallet(agent.cdpWalletSeed, protocolAddress, ["usdc"]);
+      const { transfers } = await sweepWallet(agent.cdpWalletAddress, protocolAddress, ["usdc"]);
       // Note: sweepWallet sweeps full balance; threshold management via CDP transfer amount
       // For future: partial sweep (keep threshold) requires amount-specific transfer
       for (const t of transfers) {

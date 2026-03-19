@@ -85,7 +85,7 @@ router.post("/auth/login", async (req, res) => {
               walletAddress: wallet.address,
               walletStatus: "active",
               cdpWalletId: wallet.walletId,
-              cdpWalletSeed: wallet.seed,
+              cdpWalletSeed: null,
               cdpWalletCreatedAt: new Date(),
               updatedAt: new Date(),
             }).where(eq(usersTable.id, newUser.id));
@@ -220,7 +220,7 @@ router.post("/auth/verify-code", async (req, res) => {
       setImmediate(async () => {
         try {
           const wallet = await createUserWallet(normalizedEmail);
-          await db.update(usersTable).set({ walletAddress: wallet.address, walletStatus: "active", cdpWalletId: wallet.walletId, cdpWalletSeed: wallet.seed, cdpWalletCreatedAt: new Date(), updatedAt: new Date() }).where(eq(usersTable.id, newUser.id));
+          await db.update(usersTable).set({ walletAddress: wallet.address, walletStatus: "active", cdpWalletId: wallet.walletId, cdpWalletSeed: null, cdpWalletCreatedAt: new Date(), updatedAt: new Date() }).where(eq(usersTable.id, newUser.id));
         } catch {}
       });
     }

@@ -1,170 +1,140 @@
-import { Coinbase, Wallet } from "@coinbase/coinbase-sdk";
+/**
+ * CDP module — Coinbase Developer Platform SDK v2
+ *
+ * Uses @coinbase/cdp-sdk (NOT the deprecated @coinbase/coinbase-sdk).
+ * Accounts are identified by name (deterministic, idempotent via getOrCreateAccount).
+ * No seed storage needed — CDP manages private keys server-side.
+ *
+ * Env vars required:
+ *   CDP_KEY_ID        — API Key ID from portal.cdp.coinbase.com
+ *   CDP_API_KEY       — API Key Secret
+ *   CDP_WALLET_SECRET — Wallet Secret (required for signing)
+ */
 
-let configured = false;
+import { CdpClient } from "@coinbase/cdp-sdk";
+import {
+  createPublicClient, http, formatUnits,
+  encodeFunctionData, erc20Abi,
+} from "viem";
+import { base } from "viem/chains";
 
-function configureCDP() {
-  if (configured) return;
-  const keyName = process.env.CDP_KEY_ID;
-  const privateKey = process.env.CDP_API_KEY;
-  if (!keyName || !privateKey) throw new Error("CDP_KEY_ID and CDP_API_KEY must be set");
-  Coinbase.configure({
-    apiKeyName: keyName,
-    privateKey: privateKey.replace(/\\n/g, "\n"),
-  });
-  configured = true;
+// ─── USDC on Base mainnet ─────────────────────────────────────────────────────
+const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as `0x${string}`;
+
+// ─── Singleton viem public client ─────────────────────────────────────────────
+const publicClient = createPublicClient({ chain: base, transport: http() });
+
+// ─── Singleton CDP client ─────────────────────────────────────────────────────
+let _cdp: CdpClient | null = null;
+
+function getClient(): CdpClient {
+  if (_cdp) return _cdp;
+  const apiKeyId     = process.env.CDP_KEY_ID;
+  const apiKeySecret = process.env.CDP_API_KEY;
+  const walletSecret = process.env.CDP_WALLET_SECRET;
+  if (!apiKeyId || !apiKeySecret || !walletSecret) {
+    throw new Error("CDP_KEY_ID, CDP_API_KEY, and CDP_WALLET_SECRET must be set");
+  }
+  _cdp = new CdpClient({ apiKeyId, apiKeySecret, walletSecret });
+  return _cdp;
 }
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 export interface CDPWalletResult {
-  walletId: string;
-  address: string;
-  network: string;
-  seed: string;
+  walletId: string;   // account name (e.g. "agent-brody-bennett")
+  address:  string;   // EVM address (0x...)
+  network:  string;
+  seed:     string;   // always "" — new SDK manages keys server-side
 }
 
 export interface WalletBalance {
-  asset: string;
-  amount: string;
-  amountNumber: number;
+  asset:         string;
+  amount:        string;
+  amountNumber:  number;
 }
 
 export interface AgentWalletInfo {
-  agentId: string;
+  agentId:   string;
   agentName: string;
   agentSlug: string;
-  walletId: string;
-  address: string;
-  network: string;
-  balances: WalletBalance[];
-  totalUsd: number | null;
+  walletId:  string;
+  address:   string;
+  network:   string;
+  balances:  WalletBalance[];
+  totalUsd:  number | null;
   createdAt: Date | null;
 }
 
-// ─── Global serial wallet-creation queue ──────────────────────────────────────
-// CDP enforces ~1 CreateWallet per 60 seconds per API key.
-// We serialize all creation requests through a single promise chain and enforce
-// a mandatory 70-second cool-down after each attempt (success or failure) so
-// concurrent admin triggers and the background worker never collide.
+// ─── Account creation / retrieval (idempotent) ────────────────────────────────
 
-const CREATION_COOLDOWN_MS = 70_000; // 70 s between any two CreateWallet calls
-let _walletCreationChain: Promise<unknown> = Promise.resolve();
-let _lastCreationAt = 0;
-
-function queueWalletCreation<T>(label: string, fn: () => Promise<T>): Promise<T> {
-  const job = _walletCreationChain.then(async (): Promise<T> => {
-    // Enforce minimum gap since last creation attempt
-    const elapsed = Date.now() - _lastCreationAt;
-    const wait = Math.max(0, CREATION_COOLDOWN_MS - elapsed);
-    if (wait > 0) {
-      console.log(`[cdp] ${label} — queue cool-down ${Math.ceil(wait / 1000)}s…`);
-      await new Promise(r => setTimeout(r, wait));
-    }
-    _lastCreationAt = Date.now();
-    try {
-      return await fn();
-    } finally {
-      // Reset clock after the call regardless of success/failure so the next
-      // caller waits a full cooldown from this moment.
-      _lastCreationAt = Date.now();
-    }
-  });
-  // Advance the chain regardless of individual success/failure so subsequent
-  // jobs are not permanently blocked by a rejected promise.
-  _walletCreationChain = job.catch(() => {});
-  return job;
+async function getOrCreate(accountName: string): Promise<CDPWalletResult> {
+  const cdp = getClient();
+  console.log(`[cdp] getOrCreateAccount("${accountName}")…`);
+  const account = await cdp.evm.getOrCreateAccount({ name: accountName });
+  console.log(`[cdp] account ready: ${account.address} (name: ${account.name})`);
+  return {
+    walletId: account.name,
+    address:  account.address,
+    network:  "base-mainnet",
+    seed:     "",
+  };
 }
 
-// ─── Retry helper (used inside the queue, only for transient errors) ──────────
-
-function isRateLimitError(err: any): boolean {
-  return (
-    err?.httpCode === 429 ||
-    err?.apiCode === "resource_exhausted" ||
-    String(err?.message ?? "").toLowerCase().includes("rate limit") ||
-    String(err?.message ?? "").toLowerCase().includes("resource_exhausted")
-  );
-}
-
-async function withRetry<T>(
-  label: string,
-  fn: () => Promise<T>,
-  maxAttempts = 3,
-): Promise<T> {
-  // Retry delays for transient errors other than rate-limit (network blips, etc.)
-  const delays = [0, 5000, 15000];
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      if (attempt > 0) {
-        const delay = delays[attempt] ?? 15000;
-        console.log(`[cdp] ${label} — retry ${attempt}/${maxAttempts - 1} in ${delay / 1000}s…`);
-        await new Promise(r => setTimeout(r, delay));
-      }
-      return await fn();
-    } catch (err: any) {
-      const isLast = attempt === maxAttempts - 1;
-      // Rate-limit errors should not be retried inside withRetry — the queue
-      // cool-down handles spacing; just surface the error so the caller backs off.
-      if (isRateLimitError(err) || isLast) throw err;
-    }
-  }
-  throw new Error(`[cdp] ${label} — exhausted all retries`);
-}
-
-// ─── Wallet creation ──────────────────────────────────────────────────────────
-
-async function _doCreateWallet(network: string, label: string): Promise<CDPWalletResult> {
-  configureCDP();
-  console.log(`[cdp] creating wallet for ${label} on ${network}…`);
-  return withRetry(`createWallet(${label})`, async () => {
-    const wallet = await Wallet.create({ networkId: network });
-    const defaultAddress = await wallet.getDefaultAddress();
-    const address = defaultAddress.getId();
-    const walletId = wallet.getId() ?? "";
-    const seed = JSON.stringify(await wallet.export());
-    console.log(`[cdp] wallet created for ${label}: ${address}`);
-    return { walletId, address, network, seed };
-  });
-}
-
-export function createWallet(network = "base-mainnet"): Promise<CDPWalletResult> {
-  return queueWalletCreation("createWallet", () => _doCreateWallet(network, "anonymous"));
-}
-
+/** Provision or retrieve agent wallet — idempotent, safe to call any time. */
 export function createAgentWallet(
-  network = "base-mainnet",
+  _network   = "base-mainnet",
   agentLabel?: string,
+  agentSlug?:  string,
 ): Promise<CDPWalletResult> {
-  const label = agentLabel ?? "agent";
-  console.log(`[cdp] queueing wallet creation for "${label}"`);
-  return queueWalletCreation(`agent:${label}`, () => _doCreateWallet(network, label));
+  const safeName = agentSlug
+    ? `agent-${agentSlug}`
+    : `agent-${(agentLabel ?? "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`;
+  console.log(`[cdp] provisioning agent account: "${safeName}"`);
+  return getOrCreate(safeName);
 }
 
-export function createUserWallet(email: string, network = "base-mainnet"): Promise<CDPWalletResult> {
-  console.log(`[cdp] queueing wallet creation for user ${email}`);
-  return queueWalletCreation(`user:${email}`, () => _doCreateWallet(network, email));
+/** Provision or retrieve user wallet — idempotent, keyed by email. */
+export function createUserWallet(email: string, _network = "base-mainnet"): Promise<CDPWalletResult> {
+  const safeName = `user-${email.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/(^-|-$)/g, "")}`;
+  console.log(`[cdp] provisioning user account: "${safeName}"`);
+  return getOrCreate(safeName);
 }
 
-// ─── Wallet import & balances ─────────────────────────────────────────────────
-
-export async function importWallet(seed: string): Promise<{ address: string; wallet: InstanceType<typeof Wallet> }> {
-  configureCDP();
-  const data = JSON.parse(seed);
-  const wallet = await Wallet.import(data);
-  const defaultAddress = await wallet.getDefaultAddress();
-  return { address: defaultAddress.getId(), wallet };
+/** Generic wallet creation (for one-off uses). */
+export function createWallet(_network = "base-mainnet"): Promise<CDPWalletResult> {
+  return getOrCreate(`wallet-${Date.now()}`);
 }
 
-export async function getWalletBalances(seed: string): Promise<WalletBalance[]> {
+// ─── Balances ─────────────────────────────────────────────────────────────────
+
+/**
+ * Get ETH + USDC balances for a wallet address.
+ * @param address  EVM address (0x...) — NOT a seed string.
+ */
+export async function getWalletBalances(address: string): Promise<WalletBalance[]> {
+  if (!address || !address.startsWith("0x")) return [];
   try {
-    configureCDP();
-    const { wallet } = await importWallet(seed);
-    const balanceMap = await wallet.listBalances();
+    const addr = address as `0x${string}`;
+    const [ethBal, usdcBal] = await Promise.all([
+      publicClient.getBalance({ address: addr }),
+      publicClient.readContract({
+        address: USDC_BASE,
+        abi:     erc20Abi,
+        functionName: "balanceOf",
+        args:    [addr],
+      }) as Promise<bigint>,
+    ]);
+
     const balances: WalletBalance[] = [];
-    balanceMap.forEach((amount, asset) => {
-      const amountNum = parseFloat(amount.toString());
-      if (amountNum > 0) {
-        balances.push({ asset: String(asset), amount: amount.toString(), amountNumber: amountNum });
-      }
-    });
+    const ethNum = parseFloat(formatUnits(ethBal, 18));
+    if (ethNum > 0) {
+      balances.push({ asset: "eth", amount: formatUnits(ethBal, 18), amountNumber: ethNum });
+    }
+    const usdcNum = parseFloat(formatUnits(usdcBal, 6));
+    if (usdcNum > 0) {
+      balances.push({ asset: "usdc", amount: formatUnits(usdcBal, 6), amountNumber: usdcNum });
+    }
     return balances;
   } catch (err) {
     console.warn("[cdp] balance fetch failed:", (err as Error).message);
@@ -172,52 +142,122 @@ export async function getWalletBalances(seed: string): Promise<WalletBalance[]> 
   }
 }
 
-// ─── Wallet sweep ─────────────────────────────────────────────────────────────
+// ─── Sweep ────────────────────────────────────────────────────────────────────
 
 export interface SweepResult {
-  agentId: string;
+  agentId:   string;
   agentSlug: string;
-  address: string;
+  address:   string;
   transfers: { asset: string; amount: string; txHash?: string; error?: string }[];
   ok: boolean;
 }
 
+/**
+ * Sweep USDC (and optionally ETH) from a CDP account to a destination address.
+ * @param fromAddress  Source EVM address (0x...)
+ * @param toAddress    Destination EVM address
+ * @param assets       Assets to sweep (default: ["usdc"])
+ */
 export async function sweepWallet(
-  seed: string,
-  toAddress: string,
-  assets: string[] = ["eth", "usdc"],
-): Promise<{ transfers: { asset: string; amount: string; txHash?: string; error?: string }[] }> {
-  configureCDP();
-  const { wallet } = await importWallet(seed);
-  const balanceMap = await wallet.listBalances();
+  fromAddress:  string,
+  toAddress:    string,
+  assets:       string[] = ["usdc"],
+): Promise<{ transfers: { asset: string; amount: string; txHash?: string; error?: string }[]; txHash?: string; fromAddress?: string }> {
+  if (!fromAddress?.startsWith("0x")) {
+    console.warn("[cdp] sweepWallet: invalid fromAddress, skipping");
+    return { transfers: [], fromAddress };
+  }
+
+  const cdp = getClient();
+  const from = fromAddress as `0x${string}`;
   const transfers: { asset: string; amount: string; txHash?: string; error?: string }[] = [];
 
   for (const asset of assets) {
-    const balance = balanceMap.get(asset as any);
-    if (!balance) continue;
-    const amountNum = parseFloat(balance.toString());
-    if (amountNum <= 0) continue;
-
     try {
-      const transfer = await wallet.createTransfer({
-        amount: balance,
-        assetId: asset,
-        destination: toAddress,
-        gasless: asset.toLowerCase() === "usdc",
-      });
-      await transfer.wait();
-      const txHash = transfer.getTransactionHash() ?? undefined;
-      transfers.push({ asset, amount: balance.toString(), txHash });
-      console.log(`[cdp] swept ${balance} ${asset} → ${toAddress} | tx: ${txHash}`);
+      if (asset.toLowerCase() === "usdc") {
+        const balance = await publicClient.readContract({
+          address: USDC_BASE,
+          abi:     erc20Abi,
+          functionName: "balanceOf",
+          args:    [from],
+        }) as bigint;
+
+        if (balance <= 0n) {
+          console.log(`[cdp] sweep: no USDC balance at ${from}`);
+          continue;
+        }
+
+        const data = encodeFunctionData({
+          abi:          erc20Abi,
+          functionName: "transfer",
+          args:         [toAddress as `0x${string}`, balance],
+        });
+
+        const { transactionHash } = await cdp.evm.sendTransaction({
+          address:  from,
+          network:  "base",
+          transaction: { to: USDC_BASE, data },
+        });
+
+        const amount = formatUnits(balance, 6);
+        transfers.push({ asset: "usdc", amount, txHash: transactionHash });
+        console.log(`[cdp] swept ${amount} USDC → ${toAddress} | tx: ${transactionHash}`);
+      }
+
+      if (asset.toLowerCase() === "eth") {
+        const balance = await publicClient.getBalance({ address: from });
+        if (balance <= 0n) continue;
+
+        // Reserve ~0.001 ETH for gas
+        const GAS_RESERVE = 1_000_000_000_000_000n; // 0.001 ETH
+        if (balance <= GAS_RESERVE) {
+          console.log(`[cdp] sweep: ETH balance too low to cover gas at ${from}`);
+          continue;
+        }
+        const sendAmount = balance - GAS_RESERVE;
+
+        const { transactionHash } = await cdp.evm.sendTransaction({
+          address:  from,
+          network:  "base",
+          transaction: { to: toAddress as `0x${string}`, value: sendAmount },
+        });
+
+        const amount = formatUnits(sendAmount, 18);
+        transfers.push({ asset: "eth", amount, txHash: transactionHash });
+        console.log(`[cdp] swept ${amount} ETH → ${toAddress} | tx: ${transactionHash}`);
+      }
     } catch (err: any) {
-      transfers.push({ asset, amount: balance.toString(), error: err?.message ?? String(err) });
+      transfers.push({ asset, amount: "0", error: err?.message ?? String(err) });
       console.warn(`[cdp] sweep failed for ${asset}:`, err?.message);
     }
   }
 
-  return { transfers };
+  const firstTx = transfers.find(t => t.txHash)?.txHash;
+  return { transfers, txHash: firstTx, fromAddress };
 }
 
+// ─── Legacy compat (import wallet by seed) ───────────────────────────────────
+// Old SDK used seed JSON. New SDK doesn't need seeds.
+// If address is passed directly, return it. If old JSON seed, warn.
+
+export async function importWallet(seedOrAddress: string): Promise<{ address: string; wallet: null }> {
+  if (seedOrAddress?.startsWith("0x")) {
+    return { address: seedOrAddress, wallet: null };
+  }
+  try {
+    const parsed = JSON.parse(seedOrAddress);
+    if (parsed) {
+      console.warn("[cdp] importWallet called with old seed JSON — wallet needs re-provisioning with new SDK");
+      throw new Error("Old CDP wallet seed format. Re-provision this wallet.");
+    }
+  } catch (e: any) {
+    if (e.message?.includes("Old CDP")) throw e;
+  }
+  return { address: seedOrAddress, wallet: null };
+}
+
+// ─── Config check ─────────────────────────────────────────────────────────────
+
 export function isCDPConfigured(): boolean {
-  return !!(process.env.CDP_KEY_ID && process.env.CDP_API_KEY);
+  return !!(process.env.CDP_KEY_ID && process.env.CDP_API_KEY && process.env.CDP_WALLET_SECRET);
 }
