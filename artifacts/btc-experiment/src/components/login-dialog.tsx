@@ -11,7 +11,7 @@ interface LoginDialogProps {
 }
 
 export function LoginDialog({ open, onClose, onSuccess }: LoginDialogProps) {
-  const { login, ready, authenticated, user: privyUser } = usePrivy();
+  const { loginWithEmail, authenticated, user: privyUser } = usePrivy();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +52,15 @@ export function LoginDialog({ open, onClose, onSuccess }: LoginDialogProps) {
     })();
   }, [open, authenticated, privyUser, onSuccess, onClose]);
 
+  const handleLogin = async () => {
+    setError(null);
+    try {
+      await loginWithEmail();
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to start email login");
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={isOpen => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-sm">
@@ -60,11 +69,7 @@ export function LoginDialog({ open, onClose, onSuccess }: LoginDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4 pt-4">
-          {!ready ? (
-            <div className="flex items-center justify-center py-6">
-              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : authenticated ? (
+          {authenticated ? (
             <div className="text-center space-y-3">
               <p className="text-sm text-muted-foreground">
                 Signing in with {privyUser?.email?.address}…
@@ -77,10 +82,7 @@ export function LoginDialog({ open, onClose, onSuccess }: LoginDialogProps) {
                 Sign in with your email to continue.
               </p>
               <Button
-                onClick={() => {
-                  setError(null);
-                  login();
-                }}
+                onClick={handleLogin}
                 className="w-full"
                 size="lg"
                 disabled={loading}
