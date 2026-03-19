@@ -649,6 +649,7 @@ router.post("/admin/agents", requireAdmin, async (req, res) => {
     const existing = await db.select({ id: agentsTable.id }).from(agentsTable).where(eq(agentsTable.slug, finalSlug)).limit(1).then(r => r[0]);
     if (existing) finalSlug = `${finalSlug}-${Math.random().toString(36).slice(2, 5)}`;
 
+    const adminUser = (req as any).user;
     const [agent] = await db.insert(agentsTable).values({
       slug: finalSlug,
       name, description: description || null, offerUrl,
@@ -659,6 +660,7 @@ router.post("/admin/agents", requireAdmin, async (req, res) => {
       postTemplates: postTemplates || null,
       characterPrompt: characterPrompt || null,
       twitterHandle: twitterHandle || null,
+      ownerId: adminUser?.id ?? null,
     }).returning();
 
     // Auto-provision CDP wallet if credentials are configured

@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useGetDashboardStats,
   useGetMyRotatorSlots,
@@ -19,7 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Activity, Clock, Plus, Copy, Link as LinkIcon,
   RefreshCw, CheckCircle2, ArrowRight,
-  Users, Coins, ExternalLink, DollarSign, Shield
+  Users, Coins, ExternalLink, DollarSign, Shield,
+  Wallet, ArrowUpRight, AlertCircle, CheckCircle
 } from "lucide-react";
 import { formatDistanceToNow, isPast } from "date-fns";
 import { motion } from "framer-motion";
@@ -27,10 +29,31 @@ import { motion } from "framer-motion";
 const APP_URL = (import.meta.env.VITE_APP_URL as string | undefined)?.replace(/\/$/, "") || window.location.origin;
 
 export default function Dashboard() {
-  const { user, isLoading: isAuthLoading, isAuthenticated, login } = useAuth();
+  const { user, token, isLoading: isAuthLoading, isAuthenticated, login } = useAuth();
   const { toast } = useToast();
+  const qc = useQueryClient();
 
   const enabled = isAuthenticated;
+  const authHeaders = React.useMemo(() => token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" }, [token]);
+
+  // Wallet
+  const { data: walletData, isLoading: walletLoading, refetch: refetchWallet } = useQuery<{
+    ok: boolean; walletAddress: string | null; walletStatus: string;
+    earnings: { pending: number; approved: number; paid: number; withdrawable: number };
+    splits: any[];
+  }>({
+    queryKey: ["dashboard-wallet"],
+    queryFn: () => fetch("/api/dashboard/wallet", { headers: authHeaders }).then(r => r.json()),
+    enabled,
+    staleTime: 30_000,
+  });
+  const [walletAddressInput, setWalletAddressInput] = React.useState("");
+  const [savingAddress, setSavingAddress] = React.useState(false);
+  const [withdrawing, setWithdrawing] = React.useState(false);
+
+  React.useEffect(() => {
+    if (walletData?.walletAddress && !walletAddressInput) setWalletAddressInput(walletData.walletAddress);
+  }, [walletData?.walletAddress]);
 
   const { data: stats, isLoading: isStatsLoading } = useGetDashboardStats({ query: { enabled } });
   const { data: slotsRes, refetch: refetchSlots, isLoading: isSlotsLoading } = useGetMyRotatorSlots({ query: { enabled } });
@@ -176,10 +199,13 @@ export default function Dashboard() {
       {/* Tabs */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
         <Tabs defaultValue="slots">
-          <TabsList className="grid w-full grid-cols-3 h-11 mb-6">
+          <TabsList className="grid w-full grid-cols-4 h-11 mb-6">
             <TabsTrigger value="slots">Rotator Slots</TabsTrigger>
             <TabsTrigger value="offers">Offers</TabsTrigger>
             <TabsTrigger value="referrals">Referrals</TabsTrigger>
+            <TabsTrigger value="wallet" className="flex items-center gap-1.5">
+              <Wallet className="w-3.5 h-3.5" /> Wallet
+            </TabsTrigger>
           </TabsList>
 
           {/* Slots Tab */}
@@ -382,6 +408,175 @@ export default function Dashboard() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Wallet Tab */}
+          <TabsContent value="wallet" className="space-y-4">
+            {/* Earnings summary */}
+            <div className="grid grid-cols-3 gap-4">
+              {walletLoading ? (
+                [...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)
+              ) : (
+                <>
+                  <Card className="border-primary/20 bg-primary/5">
+                    <CardContent className="p-5">
+                      <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Available to Withdraw</p>
+                      <p className="text-3xl font-bold font-display text-primary">
+                        ${(walletData?.earnings.withdrawable ?? 0).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">USDC on Base</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-5">
+                      <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Paid Out</p>
+                      <p className="text-3xl font-bold font-display text-foreground">
+                        ${(walletData?.earnings.paid ?? 0).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">All time</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-5">
+                      <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Commission Splits</p>
+                      <p className="text-3xl font-bold font-display text-foreground">
+                        {walletData?.splits.length ?? 0}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">Total events</p>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </div>
+
+            {/* Wallet address */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Wallet className="w-4 h-4 text-primary" /> Withdrawal Address
+                </CardTitle>
+                <CardDescription>Your Base (EVM) wallet address for USDC commission payouts.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="0x..."
+                    value={walletAddressInput}
+                    onChange={e => setWalletAddressInput(e.target.value)}
+                    className="font-mono text-sm"
+                  />
+                  <Button
+                    variant="outline"
+                    disabled={savingAddress || !walletAddressInput}
+                    onClick={async () => {
+                      setSavingAddress(true);
+                      try {
+                        const r = await fetch("/api/dashboard/wallet/address", {
+                          method: "POST", headers: authHeaders,
+                          body: JSON.stringify({ address: walletAddressInput }),
+                        });
+                        const d = await r.json();
+                        if (!d.ok) throw new Error(d.error ?? "Failed");
+                        await refetchWallet();
+                        toast({ title: "Wallet address saved" });
+                      } catch (e: any) {
+                        toast({ title: "Save failed", description: e.message, variant: "destructive" });
+                      } finally { setSavingAddress(false); }
+                    }}
+                    className="shrink-0"
+                  >
+                    {savingAddress ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                    <span className="ml-1.5">Save</span>
+                  </Button>
+                </div>
+                {walletData?.walletAddress && (
+                  <div className="flex items-center gap-2 text-xs text-green-400">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    Saved: <span className="font-mono">{walletData.walletAddress.slice(0, 10)}…{walletData.walletAddress.slice(-6)}</span>
+                  </div>
+                )}
+                {!walletData?.walletAddress && !walletLoading && (
+                  <div className="flex items-center gap-2 text-xs text-amber-400">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    No withdrawal address set. Add one above to receive payouts.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Withdraw button */}
+            <Card className="border-primary/20">
+              <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <p className="font-semibold text-sm">Request Withdrawal</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Queue your pending commissions for USDC payout to your wallet.
+                    {(walletData?.earnings.withdrawable ?? 0) === 0 && " No pending balance right now."}
+                  </p>
+                </div>
+                <Button
+                  disabled={withdrawing || !walletData?.walletAddress || (walletData?.earnings.withdrawable ?? 0) === 0}
+                  onClick={async () => {
+                    setWithdrawing(true);
+                    try {
+                      const r = await fetch("/api/dashboard/wallet/withdraw", { method: "POST", headers: authHeaders });
+                      const d = await r.json();
+                      if (!d.ok && !d.message) throw new Error(d.error ?? "Failed");
+                      await refetchWallet();
+                      toast({ title: "Withdrawal queued", description: d.message });
+                    } catch (e: any) {
+                      toast({ title: "Withdrawal failed", description: e.message, variant: "destructive" });
+                    } finally { setWithdrawing(false); }
+                  }}
+                  className="shrink-0 gap-1.5"
+                >
+                  {withdrawing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
+                  Withdraw ${(walletData?.earnings.withdrawable ?? 0).toFixed(2)} USDC
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Commission history */}
+            {(walletData?.splits?.length ?? 0) > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Commission History</CardTitle>
+                  <CardDescription>Your share of platform revenue events.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {walletData!.splits.map((s: any) => (
+                      <div key={s.id} className="flex items-center justify-between p-3 rounded-lg border border-border/30 bg-muted/10 text-sm">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${
+                            s.status === "paid" ? "bg-green-500" :
+                            s.status === "approved" ? "bg-amber-400" : "bg-muted-foreground/40"
+                          }`} />
+                          <div>
+                            <p className="text-xs font-medium capitalize">{s.recipientType?.replace("_", " ")}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {s.paidAt ? formatDistanceToNow(new Date(s.paidAt), { addSuffix: true }) : formatDistanceToNow(new Date(s.createdAt), { addSuffix: true })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-mono font-bold text-primary">${Number(s.splitAmount).toFixed(2)}</p>
+                          <p className="text-[10px] text-muted-foreground capitalize">{s.status}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {(walletData?.splits?.length ?? 0) === 0 && !walletLoading && (
+              <div className="text-center py-10 text-muted-foreground">
+                <DollarSign className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                <p className="font-medium text-sm">No commission events yet</p>
+                <p className="text-xs mt-1 opacity-60">Commissions appear here when paid seats are purchased through your referral chain.</p>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </motion.div>
