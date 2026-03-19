@@ -1476,11 +1476,12 @@ function AgentsFleetTab({ token }: { token: string | null }) {
 
   const headers = token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
 
-  const { data, isLoading, refetch } = useQuery<{ agents: any[] }>({
+  const { data, isLoading, refetch } = useQuery<{ agents: any[]; cdpConfigured: boolean }>({
     queryKey: ["admin-fleet"],
     queryFn: () => fetch("/api/admin/agents-fleet", { headers }).then(r => r.json()),
     staleTime: 20_000,
   });
+  const cdpConfigured = data?.cdpConfigured ?? false;
 
   const togglePause = useMutation({
     mutationFn: (id: string) => fetch(`/api/admin/agents/${id}/toggle-pause`, { method: "POST", headers }).then(r => r.json()),
@@ -1699,7 +1700,9 @@ function AgentsFleetTab({ token }: { token: string | null }) {
                               <span className="text-xs font-medium">CDP Wallet</span>
                               {agent.cdpWalletAddress
                                 ? <Badge className="text-xs bg-green-500/15 text-green-400 border border-green-500/30">Active</Badge>
-                                : <Badge variant="outline" className="text-xs text-muted-foreground">Not provisioned</Badge>}
+                                : cdpConfigured
+                                  ? <Badge variant="outline" className="text-xs text-amber-400 border-amber-500/40">Auto-provisioning</Badge>
+                                  : <Badge variant="outline" className="text-xs text-muted-foreground">Not provisioned</Badge>}
                             </div>
                             {agent.cdpWalletAddress ? (
                               <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-destructive hover:text-destructive"
@@ -1708,11 +1711,11 @@ function AgentsFleetTab({ token }: { token: string | null }) {
                                 <Trash2 className="w-3 h-3 mr-1" /> Clear
                               </Button>
                             ) : (
-                              <Button size="sm" className="h-6 px-2 text-xs"
+                              <Button size="sm" variant="outline" className="h-6 px-2 text-xs"
                                 onClick={() => createCDPWallet.mutate({ id: agent.id, network: "base-mainnet" })}
                                 disabled={createCDPWallet.isPending}>
                                 {createCDPWallet.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Plus className="w-3 h-3 mr-1" />}
-                                Create Wallet
+                                {cdpConfigured ? "Provision now" : "Create Wallet"}
                               </Button>
                             )}
                           </div>
@@ -3147,8 +3150,8 @@ function AgentPersonaEngineTab({ token }: { token: string | null }) {
       if (!data.success) throw new Error(data.error ?? "Create failed");
       await qc.invalidateQueries({ queryKey: ["admin-agents-fleet"] });
       toast({
-        title: `Agent "${p.name}" created${data.walletProvisioned ? " + wallet provisioned" : ""}`,
-        description: data.walletProvisioned ? `Wallet: ${data.agent.cdpWalletAddress?.slice(0,10)}…` : undefined,
+        title: `Agent "${p.name}" created`,
+        description: data.walletPending ? "CDP wallet will be provisioned automatically within 5 minutes." : undefined,
       });
       setStep(4);
     } catch (e: any) {

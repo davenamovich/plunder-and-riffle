@@ -17,12 +17,13 @@
 
 import { db } from "@workspace/db";
 import { rotatorSlotsTable, agentsTable } from "@workspace/db/schema";
-import { eq, and, lt } from "drizzle-orm";
+import { eq, and, lt, isNull } from "drizzle-orm";
 import { classifyRawLeads, draftScoredLeads } from "./ralph.js";
 import { getDailyUsage } from "./moltis.js";
 import { seedDefaultSequenceIfNeeded } from "./dm.js";
 import { runAllAgentEngines } from "./agent-engine.js";
 import { runSportsTipsEngine } from "./sports-tips.js";
+import { createAgentWallet, isCDPConfigured } from "./cdp.js";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -92,6 +93,38 @@ async function runDraftTick() {
   }
 }
 
+// ─── CDP Wallet provisioning ──────────────────────────────────────────────────
+// Runs every 5 minutes — provisions ONE missing wallet per tick.
+// Sequential single-wallet-per-tick approach avoids CDP rate limits entirely.
+
+async function provisionNextMissingWallet() {
+  if (!isCDPConfigured()) return;
+  try {
+    const agent = await db
+      .select({ id: agentsTable.id, slug: agentsTable.slug, name: agentsTable.name })
+      .from(agentsTable)
+      .where(isNull(agentsTable.cdpWalletId))
+      .limit(1)
+      .then(r => r[0]);
+
+    if (!agent) return; // all agents have wallets
+
+    console.log(`[cdp-worker] provisioning wallet for agent "${agent.slug}"…`);
+    const wallet = await createAgentWallet("base-mainnet", agent.name);
+    await db.update(agentsTable).set({
+      cdpWalletId: wallet.walletId,
+      cdpWalletAddress: wallet.address,
+      cdpWalletNetwork: wallet.network,
+      cdpWalletSeed: wallet.seed ?? null,
+      cdpWalletCreatedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(agentsTable.id, agent.id));
+    console.log(`[cdp-worker] wallet provisioned for "${agent.slug}": ${wallet.address}`);
+  } catch (err: any) {
+    console.warn("[cdp-worker] wallet provision failed:", err?.apiCode ?? err?.message);
+  }
+}
+
 // ─── Scheduler ────────────────────────────────────────────────────────────────
 
 let started = false;
@@ -136,6 +169,9 @@ export function startWorker() {
     }
   }, 6 * 60 * MINUTE);
 
+  // CDP wallet provisioning — every 5 minutes, ONE wallet per tick (avoids rate limits)
+  setInterval(provisionNextMissingWallet, 5 * MINUTE);
+
   // Run immediately on start to catch any queue backlog
   setTimeout(async () => {
     await seedDefaultSequenceIfNeeded();
@@ -143,7 +179,9 @@ export function startWorker() {
     resetDailyCaps();
     runClassifyTick().then(() => runDraftTick());
     runAllAgentEngines().catch(err => console.error("[worker] engine startup:", err));
+    // Defer wallet provisioning 30s after startup to let server settle
+    setTimeout(provisionNextMissingWallet, 30 * SECOND);
   }, 5 * SECOND);
 
-  console.log("[worker] scheduled: expire=30s, classify=8m×30 leads, draft=12m×30 leads, caps=60m, engine=30m, sports-tips=6h | budget=5000/day");
+  console.log("[worker] scheduled: expire=30s, classify=8m×30 leads, draft=12m×30 leads, caps=60m, engine=30m, sports-tips=6h, cdp-wallet=5m | budget=5000/day");
 }

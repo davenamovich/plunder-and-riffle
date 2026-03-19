@@ -634,7 +634,7 @@ router.get("/admin/agents-fleet", requireAdmin, async (req, res) => {
         ownsAgent: adminUser?.id ? agent.ownerId === adminUser.id : false,
       };
     }));
-    res.json({ agents: enriched });
+    res.json({ agents: enriched, cdpConfigured: isCDPConfigured() });
   } catch (err) { console.error(err); res.status(500).json({ error: "Internal server error" }); }
 });
 
@@ -666,30 +666,13 @@ router.post("/admin/agents", requireAdmin, async (req, res) => {
       ownerId: adminUser?.id ?? null,
     }).returning();
 
-    // Auto-provision CDP wallet if credentials are configured
-    let walletProvisioned = false;
+    // Wallet is provisioned asynchronously by the background worker (every 5 min).
+    // Avoids CDP rate-limit errors caused by inline creation at request time.
     if (isCDPConfigured()) {
-      try {
-        const agentLabel = email ? `${name} <${email}>` : name;
-        const wallet = await createAgentWallet("base-mainnet", agentLabel);
-        await db.update(agentsTable).set({
-          cdpWalletId: wallet.walletId,
-          cdpWalletAddress: wallet.address,
-          cdpWalletNetwork: wallet.network,
-          cdpWalletSeed: wallet.seed,
-          cdpWalletCreatedAt: new Date(),
-          updatedAt: new Date(),
-        }).where(eq(agentsTable.id, agent.id));
-        agent.cdpWalletAddress = wallet.address;
-        agent.cdpWalletId = wallet.walletId;
-        walletProvisioned = true;
-        console.log(`[cdp] auto-provisioned wallet for new agent ${agent.slug}: ${wallet.address}`);
-      } catch (walletErr: any) {
-        console.warn(`[cdp] auto-provision failed for ${agent.slug}:`, walletErr?.message);
-      }
+      console.log(`[cdp] agent ${agent.slug} queued for wallet provisioning (background worker)`);
     }
 
-    res.json({ success: true, agent, walletProvisioned });
+    res.json({ success: true, agent, walletProvisioned: false, walletPending: isCDPConfigured() });
   } catch (err: any) {
     if (err.code === "23505") { res.status(400).json({ error: "Agent slug already exists" }); return; }
     console.error(err); res.status(500).json({ error: "Internal server error" });
