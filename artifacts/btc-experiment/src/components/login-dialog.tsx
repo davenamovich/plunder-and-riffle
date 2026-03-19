@@ -14,6 +14,29 @@ export function LoginDialog({ open, onClose, onSuccess }: LoginDialogProps) {
   const { loginWithEmail, authenticated, user: privyUser } = usePrivy();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loginTriggered, setLoginTriggered] = useState(false);
+
+  const handleLogin = async () => {
+    setError(null);
+    try {
+      await loginWithEmail();
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to start email login");
+      setLoginTriggered(false);
+    }
+  };
+
+  // Auto-trigger email login when dialog opens
+  useEffect(() => {
+    if (!open || authenticated || loginTriggered) return;
+    setLoginTriggered(true);
+    handleLogin();
+  }, [open, authenticated, loginTriggered, handleLogin]);
+
+  // Reset trigger flag when dialog closes
+  useEffect(() => {
+    if (!open) setLoginTriggered(false);
+  }, [open]);
 
   // When Privy auth succeeds, exchange for our JWT
   useEffect(() => {
@@ -58,15 +81,6 @@ export function LoginDialog({ open, onClose, onSuccess }: LoginDialogProps) {
       }
     })();
   }, [open, authenticated, privyUser, onSuccess, onClose]);
-
-  const handleLogin = async () => {
-    setError(null);
-    try {
-      await loginWithEmail();
-    } catch (err: any) {
-      setError(err?.message ?? "Failed to start email login");
-    }
-  };
 
   return (
     <Dialog open={open} onOpenChange={isOpen => !isOpen && onClose()}>

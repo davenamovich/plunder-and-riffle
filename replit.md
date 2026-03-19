@@ -65,3 +65,5 @@
 - ✅ **Slot duration 24 hours**: All rotator slots expire in 24 hours
 - ✅ **Onboarding bridge page**: New users see `/onboarding` after signup with agent grid + referral link saver. Saving link grants 1 token (24-hour slot)
 - ✅ **Referrer card on dashboard**: Shows who referred the user with CTA to copy and share their referral link
+- ✅ **Default slot pricing to $0**: Agent slots now default to free (paid slots optional). Fixed agentmail address validation to prevent "undefined@undefined" 
+- ✅ **Privy auto-trigger on activate**: LoginDialog now automatically opens Privy email modal when "Activate" button is clicked (no manual button click needed)
