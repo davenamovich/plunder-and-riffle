@@ -19,6 +19,9 @@ import OffersPage from "@/pages/offers";
 import ReferralLanding from "@/pages/referral-landing";
 import OnboardingPage from "@/pages/onboarding";
 import NotFound from "@/pages/not-found";
+import VesselLanding from "@/pages/vessel-landing";
+import VesselOnboard from "@/pages/vessel-onboard";
+import VesselDashboard from "@/pages/vessel-dashboard";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +42,10 @@ function Router() {
       <Route path="/join" component={() => { window.location.replace("/join/ralph"); return null; }} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/admin" component={Admin} />
+      <Route path="/vessel" component={VesselLanding} />
+      <Route path="/vessel/agents" component={AgentsPage} />
+      <Route path="/vessel/onboard/:slug" component={VesselOnboard} />
+      <Route path="/vessel/dashboard" component={VesselDashboard} />
       <Route component={NotFound} />
     </Switch>
   );

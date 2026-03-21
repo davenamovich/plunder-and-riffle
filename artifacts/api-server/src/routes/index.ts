@@ -15,6 +15,7 @@ import myAgentRouter from "./my-agent.js";
 import engineRouter from "./engine.js";
 import moltisRouter from "./moltis.js";
 import usersRouter from "./users.js";
+import vesselRouter from "./vessel.js";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(myAgentRouter);
 router.use(engineRouter);
 router.use(moltisRouter);
 router.use("/users", usersRouter);
+router.use(vesselRouter);
 
 export default router;
