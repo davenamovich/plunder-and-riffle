@@ -6,7 +6,7 @@ WORKDIR /app
 COPY . .
 
 # Install all deps
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Build frontend (BASE_PATH=/ for Railway)
 RUN cd artifacts/btc-experiment && BASE_PATH=/ pnpm build
