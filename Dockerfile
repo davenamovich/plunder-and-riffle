@@ -1,34 +1,33 @@
 FROM node:22-alpine AS builder
-# cache-bust: 20260321083233
+
+# bust: 2
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
-COPY . .
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY lib/db/package.json ./lib/db/
+COPY lib/api-client-react/package.json ./lib/api-client-react/
+COPY lib/api-zod/package.json ./lib/api-zod/
+COPY lib/api-spec/package.json ./lib/api-spec/
+COPY artifacts/api-server/package.json ./artifacts/api-server/
+COPY artifacts/btc-experiment/package.json ./artifacts/btc-experiment/
+COPY artifacts/brody-video/package.json ./artifacts/brody-video/
+COPY artifacts/mockup-sandbox/package.json ./artifacts/mockup-sandbox/
 
-# Install all deps
 RUN pnpm install --no-frozen-lockfile
 
-# Build frontend (BASE_PATH=/ for Railway)
-RUN cd artifacts/btc-experiment && BASE_PATH=/ pnpm build
+COPY . .
 
-# Build API server
+RUN cd artifacts/btc-experiment && BASE_PATH=/ pnpm build
 RUN cd artifacts/api-server && pnpm build
 
-# ── Runtime stage ──────────────────────────────────────────────────────────────
 FROM node:22-alpine
 WORKDIR /app
 
-# API bundle
 COPY --from=builder /app/artifacts/api-server/dist ./artifacts/api-server/dist
-
-# Frontend static files — API will serve these
 COPY --from=builder /app/artifacts/btc-experiment/dist/public ./artifacts/btc-experiment/dist/public
-
-# DB migrations folder (required at runtime)
 COPY --from=builder /app/lib/db/drizzle ./lib/db/drizzle
-
-# Runtime node_modules for un-bundled deps
 COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 8080
