@@ -161,7 +161,7 @@ export async function recordRotation(params: {
 // ── Record conversion + create 4 splits ───────────────────────────────────────
 export async function recordConversion(params: {
   agentId: string; affiliateUserId: string; convertedUserId?: string;
-  eventType: string; grossAmountUsd: number;
+  eventType: string; grossAmountUsdc: number;
   platform?: string; postId?: string; referralCode?: string;
 }) {
   const config = await db.select().from(vesselAgentConfigTable)
@@ -175,12 +175,12 @@ export async function recordConversion(params: {
   const [event] = await db.insert(vesselConversionEventsTable).values({
     agentId: params.agentId, affiliateUserId: params.affiliateUserId,
     convertedUserId: params.convertedUserId ?? null,
-    eventType: params.eventType, grossAmountUsd: params.grossAmountUsd,
+    eventType: params.eventType, grossAmountUsdc: params.grossAmountUsdc,
     platform: params.platform ?? null, postId: params.postId ?? null,
     referralCode: params.referralCode ?? null,
   }).returning();
 
-  const splitAmount = params.grossAmountUsd * 0.25;
+  const splitAmount = params.grossAmountUsdc * 0.25;
 
   // Referrer = person who referred the affiliate (or affiliate themselves as fallback)
   const referrerUser = affiliate?.referredById
@@ -192,16 +192,16 @@ export async function recordConversion(params: {
     { eventId: event.id, agentId: params.agentId, recipient: "referrer",
       recipientUserId: referrerUser?.id ?? params.affiliateUserId,
       recipientAddress: referrerUser?.walletAddress ?? affiliate?.walletAddress ?? null,
-      splitPct: 25, grossUsd: params.grossAmountUsd, splitAmountUsd: splitAmount, status: "pending" },
+      splitPct: 25, grossUsd: params.grossAmountUsdc, splitAmountUsd: splitAmount, status: "pending" },
     { eventId: event.id, agentId: params.agentId, recipient: "agent_ops",
       recipientUserId: null, recipientAddress: config.agentOpsWallet ?? null,
-      splitPct: 25, grossUsd: params.grossAmountUsd, splitAmountUsd: splitAmount, status: "pending" },
+      splitPct: 25, grossUsd: params.grossAmountUsdc, splitAmountUsd: splitAmount, status: "pending" },
     { eventId: event.id, agentId: params.agentId, recipient: "bot_ops",
       recipientUserId: null, recipientAddress: config.botOpsWallet ?? null,
-      splitPct: 25, grossUsd: params.grossAmountUsd, splitAmountUsd: splitAmount, status: "pending" },
+      splitPct: 25, grossUsd: params.grossAmountUsdc, splitAmountUsd: splitAmount, status: "pending" },
     { eventId: event.id, agentId: params.agentId, recipient: "protocol",
       recipientUserId: null, recipientAddress: config.protocolWallet ?? null,
-      splitPct: 25, grossUsd: params.grossAmountUsd, splitAmountUsd: splitAmount, status: "pending" },
+      splitPct: 25, grossUsd: params.grossAmountUsdc, splitAmountUsd: splitAmount, status: "pending" },
   ]);
 
   await db.update(vesselConversionEventsTable)

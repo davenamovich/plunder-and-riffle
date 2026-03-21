@@ -263,3 +263,117 @@ function CountdownTimer({ expiresAt }: { expiresAt: Date }) {
     </div>
   );
 }
+
+// ── Exported helper: Paid Seat Purchase UI ────────────────────────────────────
+// Import and use this component on the agent detail page or dashboard
+// when user wants to upgrade from free to paid seat
+
+export function PaidSeatPurchase({ agentSlug, agentName, priceUsdc }: {
+  agentSlug: string; agentName: string; priceUsdc: number;
+}) {
+  const { token } = useAuth();
+  const [step,        setStep]        = React.useState<"idle"|"pending"|"confirm"|"done">("idle");
+  const [paymentData, setPaymentData] = React.useState<any>(null);
+  const [txHash,      setTxHash]      = React.useState("");
+  const [slotId,      setSlotId]      = React.useState("");
+  const [error,       setError]       = React.useState("");
+
+  const headers = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+
+  async function initPayment() {
+    setStep("pending");
+    setError("");
+    try {
+      const res  = await fetch("/api/vessel/slots/buy-paid", {
+        method: "POST", headers, body: JSON.stringify({ agentSlug }),
+      });
+      const data = await res.json();
+      if (!data.ok) { setError(data.error); setStep("idle"); return; }
+      setPaymentData(data);
+      setSlotId(data.slotId);
+      setStep("confirm");
+    } catch (err: any) { setError(err.message); setStep("idle"); }
+  }
+
+  async function confirmPayment() {
+    if (!txHash.trim()) { setError("Paste your transaction hash"); return; }
+    setError("");
+    try {
+      const res  = await fetch("/api/vessel/slots/confirm-payment", {
+        method: "POST", headers,
+        body: JSON.stringify({ slotId, paymentRequestId: paymentData.paymentRequestId, txHash }),
+      });
+      const data = await res.json();
+      if (!data.ok) { setError(data.error); return; }
+      setStep("done");
+    } catch (err: any) { setError(err.message); }
+  }
+
+  if (step === "done") return (
+    <div className="border border-green-400/30 p-5 bg-green-400/5 text-center space-y-3">
+      <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22 }} className="text-green-400">PAID SEAT ACTIVE — 30 DAYS</div>
+      <p className="text-xs text-white/50">Your slot is locked for 30 days. Splits have been sent on-chain.</p>
+      <button onClick={() => window.location.href = "/vessel/dashboard"}
+        className="px-6 py-2 bg-green-400 text-black text-xs font-bold tracking-widest">
+        VIEW DASHBOARD →
+      </button>
+    </div>
+  );
+
+  if (step === "confirm" && paymentData) return (
+    <div className="border border-cyan-400/30 p-5 bg-cyan-400/4 space-y-4">
+      <p className="text-xs text-cyan-400 tracking-widest">// SEND USDC ON BASE</p>
+      <div className="space-y-2">
+        <div className="bg-black/50 p-3 space-y-1">
+          <p className="text-xs text-white/30 tracking-widest">SEND EXACTLY</p>
+          <p style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 32 }} className="text-cyan-400">
+            {paymentData.amountUsdc} USDC
+          </p>
+        </div>
+        <div className="bg-black/50 p-3 space-y-1">
+          <p className="text-xs text-white/30 tracking-widest">TO THIS ADDRESS (BASE MAINNET)</p>
+          <p className="text-xs text-amber-400 font-mono break-all">{paymentData.toAddress}</p>
+          <button onClick={() => navigator.clipboard.writeText(paymentData.toAddress)}
+            className="text-xs text-white/30 hover:text-white mt-1">copy address</button>
+        </div>
+        <div className="bg-black/50 p-3">
+          <p className="text-xs text-white/30 tracking-widest mb-1">REFERENCE CODE</p>
+          <p className="text-xs text-white/60 font-mono">{paymentData.referenceCode}</p>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-xs text-white/40">After sending, paste your transaction hash:</p>
+        <input
+          type="text" placeholder="0x..." value={txHash}
+          onChange={e => setTxHash(e.target.value)}
+          className="w-full bg-black/50 border border-white/10 text-white text-xs p-3 font-mono focus:outline-none focus:border-cyan-400/50"
+        />
+        {error && <p className="text-xs text-red-400">{error}</p>}
+        <button onClick={confirmPayment}
+          className="w-full py-3 bg-cyan-400 text-black text-xs font-bold tracking-widest hover:bg-white transition-colors">
+          CONFIRM PAYMENT →
+        </button>
+        <p className="text-xs text-white/20 text-center">Payment window expires in 24 hours</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="border border-white/8 p-4 space-y-3">
+      <div className="flex justify-between items-start">
+        <div>
+          <p style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, letterSpacing: 2 }}>PAID SEAT — 30 DAYS</p>
+          <p className="text-xs text-white/35">Locked slot. Agent posts your link every cycle.</p>
+        </div>
+        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24 }} className="text-amber-400">{priceUsdc} USDC</div>
+      </div>
+      {error && <p className="text-xs text-red-400">{error}</p>}
+      <button onClick={initPayment} disabled={step === "pending"}
+        className="w-full py-3 bg-amber-400 text-black text-xs font-bold tracking-widest hover:bg-white transition-colors disabled:opacity-50">
+        {step === "pending" ? "GENERATING ADDRESS..." : "BUY PAID SEAT WITH USDC →"}
+      </button>
+      <p className="text-xs text-white/20 text-center">Base mainnet · USDC · No Stripe · On-chain splits</p>
+    </div>
+  );
+}
