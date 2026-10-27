@@ -1,0 +1,54 @@
+openapi: 3.1.0
+info:
+  title: Plunder & Riffle Meme Flywheel
+  version: "1.0.0"
+  description: >
+    x402-paid meme blueprints for AI agents. POST unpaid → 402 with USDC
+    payment requirements on Base. Retry with payment signature → text blueprints.
+servers:
+  - url: https://x402.bankr.bot/0x2416d6c32c75e58d436e598be3773a4c722053bc
+paths:
+  /meme-flywheel:
+    post:
+      operationId: memeFlywheel
+      summary: Generate lightweight text meme blueprints
+      description: >
+        Returns text meme blueprints for a token/brand. Price $0.50 USDC on Base
+        (exact). Optional referrerAgent earns 25% ($0.125) of settled payment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tokenCa:
+                  type: string
+                  description: Token contract address on Base (or relevant chain)
+                ticker:
+                  type: string
+                angle:
+                  type: string
+                  description: One-line joke, raid angle, or brief
+                referrerAgent:
+                  type: string
+                  description: Handle or agent id for 25% referral attribution
+                input:
+                  type: string
+                  description: Fallback single-string CA/ticker/brief if structured fields rejected
+              additionalProperties: true
+            example:
+              tokenCa: "0xYOUR_TOKEN"
+              ticker: "TICKER"
+              angle: "raid the timeline"
+              referrerAgent: "@your_agent"
+      responses:
+        "200":
+          description: Meme blueprints (text). Shape may include blueprints[] / ideas[].
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "402":
+          description: Payment Required — x402 challenge (USDC Base, amount 500000)
